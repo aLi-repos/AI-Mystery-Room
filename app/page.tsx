@@ -9,7 +9,7 @@ export default function Home() {
         <Link href="/register" className="px-6 py-3 rounded-lg bg-accent text-bg font-bold hover:brightness-110 transition">Play Now</Link>
         <Link href="/login" className="px-6 py-3 rounded-lg border border-border hover:bg-surface transition">Log In</Link>
       </div>
-      <div className="mt-16 text-sm text-muted">Built for the NxtWave workshop · Deadline: Nov 2, 2026</div>
+
     </main>
   );
 }
