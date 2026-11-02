@@ -1,0 +1,318 @@
+// MysteryAI — Prisma schema (spec.md §6.2, P2)
+//
+// Notes vs. spec text:
+//  - Prisma 7 removed `url` from this file; the datasource URL lives in
+//    prisma.config.ts (see that file). Runtime access goes through the
+//    driver adapter `@prisma/adapter-pg` (approved deviation from §5.6).
+//  - CHECK constraints, partial/expression indexes and the `game_history`
+//    VIEW cannot be expressed in Prisma schema syntax; they are appended as
+//    custom SQL in prisma/migrations/<init>/migration.sql.
+//  - Difficulty profiles (time limits, points) are code configuration (§2B),
+//    deliberately NOT columns on `mysteries` (§6.2).
+
+generator client {
+  provider        = "prisma-client"
+  previewFeatures = ["views"]
+  output          = "./generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums (PostgreSQL ENUM types)
+// ---------------------------------------------------------------------------
+
+/// Session difficulty profile — content-independent (§2B, D11).
+enum Difficulty {
+  easy
+  medium
+  hard
+}
+
+/// Where a mystery row came from; `ai` reserved for deferred D5.
+enum MysterySource {
+  static
+  ai
+}
+
+enum MysteryStatus {
+  draft
+  published
+  archived
+}
+
+/// Allowed MVP puzzle types (§2B): three of four must be exercised (AC13).
+enum PuzzleType {
+  multiple_choice
+  text_input
+  numeric_code
+  cipher
+}
+
+enum SessionStatus {
+  in_progress
+  completed
+  timed_out
+  abandoned
+}
+
+/// Stage gating state machine (§6.2): locked → unlocked → solved.
+enum StageStatus {
+  locked
+  unlocked
+  solved
+}
+
+/// MVP evaluation is deterministic only; judge value reserved for D6.
+enum EvaluatedBy {
+  deterministic
+}
+
+// ---------------------------------------------------------------------------
+// Entities (§6.2)
+// ---------------------------------------------------------------------------
+
+/// Player accounts `[W]` + guest flag `[R]`.
+///
+/// Custom DB constraints (migration SQL):
+///  - CHECK: is_guest = true ⇒ password_hash IS NULL
+///  - UNIQUE (lower(email)) WHERE email IS NOT NULL  (citext column)
+model User {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email          String?   @db.Citext
+  passwordHash   String?   @map("password_hash")
+  displayName    String    @map("display_name") @db.VarChar(40)
+  isGuest        Boolean   @default(false) @map("is_guest")
+  guestExpiresAt DateTime? @map("guest_expires_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  mysteries Mystery[]
+  sessions  GameSession[]
+
+  @@map("users")
+}
+
+/// Mystery scenarios `[W]` — MVP seeds exactly one published row (D4).
+///
+/// Custom DB constraint (migration SQL):
+///  - CHECK: stage_count BETWEEN 3 AND 8 (MVP row = 5, D10 — the seed
+///    additionally asserts stage_count == number of stage rows).
+model Mystery {
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title                String        @unique @db.VarChar(120)
+  tagline              String        @db.VarChar(200)
+  setting              String        @db.VarChar(200)
+  theme                String        @db.VarChar(80)
+  stageCount           Int           @map("stage_count")
+  estimatedMinutes     Int           @map("estimated_minutes")
+  supportedDifficulties Json          @default("[\"easy\",\"medium\",\"hard\"]") @map("supported_difficulties")
+  source               MysterySource
+  status               MysteryStatus @default(draft)
+  createdBy            String?       @map("created_by") @db.Uuid
+  aiGenerationMeta     Json?         @map("ai_generation_meta")
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  creator  User?   @relation(fields: [createdBy], references: [id], onDelete: SetNull)
+  stages   Stage[]
+  sessions GameSession[]
+
+  @@map("mysteries")
+}
+
+/// One room/challenge per row `[W]`.
+///
+/// Custom DB constraint (migration SQL):
+///  - CHECK: multiple_choice ⇒ puzzle_options is a 4-item JSON array
+model Stage {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mysteryId     String     @map("mystery_id") @db.Uuid
+  stageNumber   Int        @map("stage_number")
+  title         String     @db.VarChar(120)
+  narrative     String     @db.Text
+  puzzleType    PuzzleType @map("puzzle_type")
+  puzzlePrompt  String     @map("puzzle_prompt") @db.Text
+  puzzleOptions Json?      @map("puzzle_options")
+  explanation   String     @db.Text
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  mystery       Mystery        @relation(fields: [mysteryId], references: [id], onDelete: Cascade)
+  clues         Clue[]
+  answer        StageAnswer?
+  hints         Hint[]
+  aiHintCache   AiHintCache[]
+  progress      StageProgress[]
+  playerAnswers PlayerAnswer[]
+
+  @@unique([mysteryId, stageNumber])
+  @@map("stages")
+}
+
+/// Clues `[W]` — at least 1 row per stage enforced by application + test.
+model Clue {
+  id         String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stageId    String @map("stage_id") @db.Uuid
+  clueNumber Int    @map("clue_number")
+  content    String @db.Text
+
+  stage Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@unique([stageId, clueNumber])
+  @@map("clues")
+}
+
+/// Server-only answer keys `[W]` — structurally isolated from client-readable
+/// content `[R]`; never appears in any API response (§9.4/§9.6).
+model StageAnswer {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stageId         String @unique @map("stage_id") @db.Uuid
+  canonicalAnswer String @map("canonical_answer") @db.VarChar(200)
+  acceptedAnswers Json   @map("accepted_answers")
+
+  stage Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@map("stage_answers")
+}
+
+/// Static fallback hint bank `[W]` — 3 pre-authored levels per stage; always
+/// available offline (Additional Requirement 2). Content must pass the same
+/// leakage rules as AI hints (§9.6) — enforced by seed-time checks + tests.
+model Hint {
+  id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stageId String @map("stage_id") @db.Uuid
+  level   Int    @db.SmallInt
+  content String @db.Text
+
+  stage Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@unique([stageId, level])
+  @@map("hints")
+}
+
+/// AI-generated hints, one row per (stage, level) `[MVP]` — written in P4.
+/// Un-granted levels are filtered out of every response (§9.6).
+model AiHintCache {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stageId      String   @map("stage_id") @db.Uuid
+  level        Int      @db.SmallInt
+  content      String   @db.Text
+  model        String   @db.VarChar(80)
+  inputTokens  Int?     @map("input_tokens")
+  outputTokens Int?     @map("output_tokens")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  stage Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@unique([stageId, level])
+  @@map("ai_hint_cache")
+}
+
+/// Game sessions `[W]`.
+///
+/// Custom DB objects (migration SQL):
+///  - CHECK: total_score >= 0
+///  - Partial index on (status) WHERE status = 'in_progress'
+///  - Partial UNIQUE (user_id, mystery_id) WHERE status = 'in_progress'
+///    → exactly one active session per user per mystery (§6.3)
+model GameSession {
+  id                 String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String        @map("user_id") @db.Uuid
+  mysteryId          String        @map("mystery_id") @db.Uuid
+  difficulty         Difficulty
+  status             SessionStatus @default(in_progress)
+  currentStageNumber Int           @default(1) @map("current_stage_number")
+  startedAt          DateTime      @default(now()) @map("started_at") @db.Timestamptz
+  expiresAt          DateTime      @map("expires_at") @db.Timestamptz
+  completedAt        DateTime?     @map("completed_at") @db.Timestamptz
+  totalScore         Int           @default(0) @map("total_score")
+  hintsUsedTotal     Int           @default(0) @map("hints_used_total") @db.SmallInt
+  correctAttempts    Int           @default(0) @map("correct_attempts")
+  totalAttempts      Int           @default(0) @map("total_attempts")
+  timeUsedSeconds    Int?          @map("time_used_seconds")
+  aiDegraded         Boolean       @default(false) @map("ai_degraded")
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mystery Mystery @relation(fields: [mysteryId], references: [id], onDelete: Restrict)
+
+  scoreBreakdown ScoreBreakdown?
+  stageProgress  StageProgress[]
+  playerAnswers  PlayerAnswer[]
+
+  @@index([userId(sort: Desc), createdAt(sort: Desc)])
+  @@map("game_sessions")
+}
+
+/// Stage gating `[W]`.
+///
+/// Custom DB constraints (migration SQL):
+///  - CHECK: hints_used BETWEEN 0 AND 3, points_awarded >= 0
+model StageProgress {
+  id            String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId     String      @map("session_id") @db.Uuid
+  stageId       String      @map("stage_id") @db.Uuid
+  status        StageStatus @default(locked)
+  hintsUsed     Int         @default(0) @map("hints_used") @db.SmallInt
+  attempts      Int         @default(0) @db.SmallInt
+  pointsAwarded Int         @default(0) @map("points_awarded")
+  solvedAt      DateTime?   @map("solved_at") @db.Timestamptz
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  stage   Stage       @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, stageId])
+  @@map("stage_progress")
+}
+
+/// Answer history / audit `[W]` — raw sanitized text, deterministic only (D6).
+model PlayerAnswer {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId   String      @map("session_id") @db.Uuid
+  stageId     String      @map("stage_id") @db.Uuid
+  answerText  String      @map("answer_text") @db.VarChar(500)
+  isCorrect   Boolean     @map("is_correct")
+  evaluatedBy EvaluatedBy @default(deterministic) @map("evaluated_by")
+  pointsDelta Int         @default(0) @map("points_delta")
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  stage   Stage       @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("player_answers")
+}
+
+/// Score breakdown, 1:1 with session `[R]` — makes the results page
+/// deterministic. Custom DB constraint (migration SQL): CHECK total >= 0.
+model ScoreBreakdown {
+  sessionId       String @id @map("session_id") @db.Uuid
+  stagePointsSum  Int    @map("stage_points_sum")
+  hintPenalty     Int    @default(0) @map("hint_penalty")
+  timeBonus       Int    @default(0) @map("time_bonus")
+  completionBonus Int    @default(0) @map("completion_bonus")
+  total           Int
+  rankLabel       String @map("rank_label") @db.VarChar(40)
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("score_breakdowns")
+}
+
+/// `game_history` — VIEW `[W]`: history is a query, not a duplicate table.
+/// The view DDL lives in prisma/views/game_history.sql and is created by the
+/// init migration (Prisma does not manage views).
+view game_history {
+  sessionId       String       @map("session_id") @db.Uuid
+  userId          String       @map("user_id") @db.Uuid
+  mysteryTitle    String       @map("mystery_title") @db.VarChar(120)
+  difficulty      Difficulty
+  status          SessionStatus
+  totalScore      Int          @map("total_score")
+  hintsUsedTotal  Int          @map("hints_used_total") @db.SmallInt
+  totalAttempts   Int          @map("total_attempts")
+  correctAttempts Int          @map("correct_attempts")
+  timeUsedSeconds Int?         @map("time_used_seconds")
+  startedAt       DateTime     @map("started_at") @db.Timestamptz
+  completedAt     DateTime?    @map("completed_at") @db.Timestamptz
+}

@@ -1,0 +1,24 @@
+generator client {
+  provider = "prisma-client"
+  previewFeatures = ["views"]
+  output   = "./generated"
+}
+datasource db {
+  provider = "postgresql"
+}
+enum Difficulty {
+  easy
+  medium
+  hard
+}
+model Widget {
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String?    @db.Citext
+  createdAt  DateTime   @default(now()) @db.Timestamptz
+  difficulty Difficulty @default(easy)
+  payload    Json?
+}
+view WidgetHistory {
+  id String @db.Uuid
+  difficulty Difficulty
+}

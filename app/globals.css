@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* Design tokens — spec.md §8.1 (cinematic noir). */
+:root {
+  --bg: #0b0e14;
+  --surface: #141a24;
+  --border: #232c3b;
+  --text: #e6e9f0;
+  --muted: #95a0b3;
+  --accent: #f0b429;
+  --ai: #39c0ba;
+  --danger: #e5484d;
+  --success: #46a758;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-ai: var(--ai);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display:
+    var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* Narrative text: readable measure (spec.md §8.1). */
+.prose-narrative {
+  max-width: 70ch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

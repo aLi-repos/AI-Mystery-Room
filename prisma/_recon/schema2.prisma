@@ -1,0 +1,12 @@
+generator client {
+  provider = "prisma-client"
+  output   = "./generated"
+}
+datasource db {
+  provider = "postgresql"
+}
+model Widget {
+  id    String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  count Int    @default(5)
+  tags  Json   @default("[\"a\",\"b\"]")
+}
