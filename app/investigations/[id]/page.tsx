@@ -6,7 +6,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Investigation workspace — evidence upload manager, AI analysis workspace,
- * findings with evidence references, follow-up Q&A, and the report viewer.
+ * findings dashboard (facts vs hypotheses, timeline, connections,
+ * contradictions, missing evidence), follow-up Q&A and the report panel.
+ *
+ * Honesty rules carried from the API: files marked "not analysed" are shown
+ * as such, and every finding displays the evidence refs behind it.
  */
 
 type Evidence = {
@@ -43,6 +47,12 @@ type Case = {
   findings: Finding[];
 };
 
+type UploadState = {
+  name: string;
+  status: "uploading" | "done" | "error";
+  message?: string;
+};
+
 const KIND_LABELS: Record<string, string> = {
   fact: "Fact",
   observation: "Observation",
@@ -50,7 +60,7 @@ const KIND_LABELS: Record<string, string> = {
   inconsistency: "Inconsistency",
   timeline: "Timeline",
   missing_evidence: "Missing evidence",
-  link: "Link",
+  link: "Connection",
 };
 
 const SUGGESTED_QUESTIONS = [
@@ -61,6 +71,8 @@ const SUGGESTED_QUESTIONS = [
   "Find contradictions between evidence.",
   "What additional evidence is required?",
 ];
+
+const MAX_FILE_MB = 4;
 
 function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -73,6 +85,140 @@ async function readError(res: Response, fallback: string): Promise<string> {
   return body?.error?.message ?? fallback;
 }
 
+function downloadText(filename: string, text: string) {
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+/* --------------------------------------------------------------------- */
+/* Sub-panels                                                            */
+/* --------------------------------------------------------------------- */
+
+function SectionTitle({
+  children,
+  hint,
+}: {
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <h2 className="font-display text-lg text-text">{children}</h2>
+      {hint ? <span className="text-xs text-muted">{hint}</span> : null}
+    </div>
+  );
+}
+
+function EvidenceCard({
+  item,
+  onDelete,
+}: {
+  item: Evidence;
+  onDelete: (id: string) => void;
+}) {
+  const analysed = item.status === "analyzed";
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-border bg-white/75 p-3">
+      <span className="evidence-chip" title={`Evidence ID ${item.ref}`}>
+        {item.ref}
+      </span>
+      <span className="min-w-0 truncate text-sm font-medium text-text" title={item.filename}>
+        {item.filename}
+      </span>
+      <span className="text-xs text-muted">
+        {item.category} · {fmtSize(item.sizeBytes)}
+      </span>
+      <span
+        className={`ml-auto inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs ${
+          analysed
+            ? "border-[rgba(44,154,91,0.45)] bg-[rgba(44,154,91,0.1)] text-success"
+            : "border-[rgba(242,194,0,0.55)] bg-evidence-soft text-[#7a5f00]"
+        }`}
+      >
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-current" />
+        {analysed ? "analysed" : "stored · not analysed"}
+      </span>
+      <button
+        type="button"
+        onClick={() => onDelete(item.id)}
+        className="text-xs text-muted underline-offset-2 transition hover:text-danger hover:underline"
+      >
+        remove
+      </button>
+      {item.processNote ? (
+        <span className="basis-full text-xs text-[#8a6d00]">{item.processNote}</span>
+      ) : null}
+    </li>
+  );
+}
+
+function FindingCard({
+  finding,
+  evidenceByRef,
+  tone,
+}: {
+  finding: Finding;
+  evidenceByRef: Map<string, Evidence>;
+  tone: "fact" | "hypothesis" | "plain";
+}) {
+  const toneStyles =
+    tone === "fact"
+      ? "border-l-4 border-l-success"
+      : tone === "hypothesis"
+        ? "border-l-4 border-l-evidence"
+        : "border-l-4 border-l-[var(--ai)]";
+  return (
+    <li className={`rounded-lg border border-border bg-white/75 p-4 ${toneStyles}`}>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="rounded-full border border-border bg-white/80 px-2 py-0.5 font-medium text-text">
+          {KIND_LABELS[finding.kind] ?? finding.kind}
+        </span>
+        <span
+          className={`rounded-full px-2 py-0.5 ${
+            finding.confidence === "high"
+              ? "bg-[rgba(44,154,91,0.12)] text-success"
+              : finding.confidence === "low"
+                ? "bg-evidence-soft text-[#7a5f00]"
+                : "bg-ai-soft text-ai"
+          }`}
+        >
+          {finding.confidence} confidence
+        </span>
+        {finding.timeLabel ? (
+          <span className="font-mono text-muted">⏱ {finding.timeLabel}</span>
+        ) : null}
+        {finding.evidenceRefs.length > 0 ? (
+          <span className="flex flex-wrap gap-1">
+            {finding.evidenceRefs.map((ref) => (
+              <span
+                key={ref}
+                className="evidence-chip"
+                title={evidenceByRef.get(ref)?.filename ?? "uploaded evidence"}
+              >
+                {ref}
+              </span>
+            ))}
+          </span>
+        ) : (
+          <span className="text-muted">from case description only</span>
+        )}
+      </div>
+      <p className="mt-2 text-sm leading-relaxed text-text">{finding.statement}</p>
+    </li>
+  );
+}
+
+/* --------------------------------------------------------------------- */
+/* Page                                                                  */
+/* --------------------------------------------------------------------- */
+
 export default function InvestigationWorkspacePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -81,15 +227,14 @@ export default function InvestigationWorkspacePage() {
   const [caseData, setCaseData] = useState<Case | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Upload state
+  // Upload state (per-file status list)
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
+  const [uploads, setUploads] = useState<UploadState[]>([]);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
 
   // Analysis state
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisMsg, setAnalysisMsg] = useState<string | null>(null);
-  const [summary, setSummary] = useState<string | null>(null);
 
   // Q&A state
   const [question, setQuestion] = useState("");
@@ -123,12 +268,14 @@ export default function InvestigationWorkspacePage() {
     load();
   }, [load]);
 
-  async function uploadFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    setUploading(true);
+  async function uploadFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList);
     setUploadMsg(null);
-    let lastError: string | null = null;
-    for (const file of Array.from(files)) {
+    setUploads(files.map((f) => ({ name: f.name, status: "uploading" as const })));
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]!;
       const form = new FormData();
       form.append("file", file);
       try {
@@ -136,13 +283,27 @@ export default function InvestigationWorkspacePage() {
           method: "POST",
           body: form,
         });
-        if (!res.ok) lastError = `${file.name}: ${await readError(res, "upload failed")}`;
+        if (res.ok) {
+          setUploads((prev) =>
+            prev.map((u, idx) => (idx === i ? { ...u, status: "done" } : u)),
+          );
+        } else {
+          const message = await readError(res, "upload failed");
+          setUploads((prev) =>
+            prev.map((u, idx) =>
+              idx === i ? { ...u, status: "error", message } : u,
+            ),
+          );
+        }
       } catch {
-        lastError = `${file.name}: network error`;
+        setUploads((prev) =>
+          prev.map((u, idx) =>
+            idx === i ? { ...u, status: "error", message: "network error" } : u,
+          ),
+        );
       }
     }
-    setUploading(false);
-    setUploadMsg(lastError ?? `Uploaded ${files.length} file(s).`);
+    setUploadMsg(`Processed ${files.length} file(s).`);
     if (fileInputRef.current) fileInputRef.current.value = "";
     await load();
   }
@@ -173,7 +334,6 @@ export default function InvestigationWorkspacePage() {
       if (!res.ok) {
         setAnalysisMsg(body?.error?.message ?? "Analysis failed");
       } else {
-        setSummary(body.summary ?? null);
         setAnalysisMsg(`Analysis complete — ${body.findings?.length ?? 0} findings.`);
       }
     } catch {
@@ -222,8 +382,11 @@ export default function InvestigationWorkspacePage() {
   if (loadError) {
     return (
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
-        <p className="rounded border border-border bg-surface p-4 text-sm text-muted">{loadError}</p>
-        <Link href="/investigations" className="mt-4 inline-block text-accent underline-offset-2 hover:underline">
+        <p className="alert-danger p-4 text-sm">{loadError}</p>
+        <Link
+          href="/investigations"
+          className="mt-4 inline-block font-medium text-accent underline-offset-2 hover:underline"
+        >
           ← Back to investigations
         </Link>
       </main>
@@ -233,7 +396,10 @@ export default function InvestigationWorkspacePage() {
   if (!caseData) {
     return (
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
-        <p className="text-sm text-muted">Loading…</p>
+        <div className="panel relative h-28 overflow-hidden p-4">
+          <div className="progress-indeterminate absolute inset-x-4 top-8 h-1.5 overflow-hidden rounded-full bg-border" />
+          <p className="mt-12 text-sm text-muted">Loading case file…</p>
+        </div>
       </main>
     );
   }
@@ -242,148 +408,338 @@ export default function InvestigationWorkspacePage() {
   const unanalysed = caseData.evidence.filter((e) => e.status !== "analyzed");
   const qaHistory = Array.isArray(caseData.qaHistory) ? caseData.qaHistory : [];
 
+  const evidenceByRef = new Map(caseData.evidence.map((e) => [e.ref, e]));
+  const byKind = (kind: string) => caseData.findings.filter((f) => f.kind === kind);
+  const observations = [
+    ...byKind("fact"),
+    ...byKind("observation"),
+  ];
+  const hypotheses = byKind("hypothesis");
+  const timeline = byKind("timeline");
+  const inconsistencies = byKind("inconsistency");
+  const connections = byKind("link");
+  const missing = byKind("missing_evidence");
+
   return (
-    <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <Link href="/investigations" className="font-display text-xl text-text">
+    <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <Link href="/investigations" className="font-display text-lg text-text">
           ← Investigations
         </Link>
-        <span className="text-sm text-muted">
-          {analysedCount}/{caseData.evidence.length} evidence analysed
-        </span>
+        <div className="flex items-center gap-3 text-sm text-muted">
+          <span className="hidden sm:inline">
+            {analysedCount}/{caseData.evidence.length} evidence analysed
+          </span>
+          {caseData.report ? (
+            <Link
+              href={`/investigations/${id}/report`}
+              className="rounded border border-border bg-white/70 px-2.5 py-1 font-medium text-accent transition hover:border-accent"
+            >
+              View report
+            </Link>
+          ) : null}
+        </div>
       </header>
 
-      <h1 className="mt-8 font-display text-3xl text-text">{caseData.title}</h1>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {caseData.categories.map((c) => (
-          <span key={c} className="rounded border border-border px-1.5 py-0.5 text-xs text-muted">
-            {c}
-          </span>
-        ))}
-      </div>
-
-      {/* Case description */}
-      <section className="mt-8">
-        <h2 className="font-display text-lg text-text">Case description</h2>
-        <pre className="mt-2 whitespace-pre-wrap rounded border border-border bg-surface p-4 font-sans text-sm text-muted">
-          {caseData.caseDescription}
-        </pre>
+      {/* Case header */}
+      <section className="panel mt-6 animate-rise p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-white/70 px-2.5 py-0.5 text-xs font-medium text-accent">
+              Case file
+            </span>
+            <h1 className="mt-2 font-display text-3xl text-text">{caseData.title}</h1>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {caseData.categories.map((c) => (
+              <span
+                key={c}
+                className="rounded-full border border-border bg-white/70 px-2.5 py-0.5 text-xs text-muted"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        </div>
+        <details className="mt-4">
+          <summary className="cursor-pointer text-sm font-medium text-accent">
+            Case description
+          </summary>
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded border border-border bg-white/70 p-4 font-sans text-sm text-muted">
+            {caseData.caseDescription}
+          </pre>
+        </details>
       </section>
 
       {/* Evidence upload manager */}
-      <section className="mt-8">
-        <h2 className="font-display text-lg text-text">Evidence</h2>
-        <div className="mt-2 rounded border border-border bg-surface p-4">
+      <section className="panel mt-5 p-6">
+        <SectionTitle hint={`${caseData.evidence.length} file(s)`}>
+          Evidence
+        </SectionTitle>
+        <div className="mt-3 rounded-lg border border-dashed border-border-strong bg-white/60 p-4">
           <input
             ref={fileInputRef}
             type="file"
             multiple
             onChange={(e) => uploadFiles(e.target.files)}
-            className="block w-full text-sm text-muted file:mr-3 file:rounded file:border-0 file:bg-accent file:px-3 file:py-1.5 file:text-sm file:text-white"
+            className="block w-full text-sm text-muted file:mr-3 file:rounded-md file:border-0 file:bg-accent file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:brightness-110"
           />
           <p className="mt-2 text-xs text-muted">
-            Max {fmtSize(4 * 1024 * 1024)} per file · 20 files max · formats limited to the
-            selected categories. Video and &quot;other&quot; files are stored but not analysed.
+            Max {MAX_FILE_MB} MB per file · 20 files max · only the categories
+            selected for this case are accepted.
           </p>
-          {uploading ? <p className="mt-2 text-xs text-muted">Uploading…</p> : null}
-          {uploadMsg ? <p className="mt-2 text-xs text-muted">{uploadMsg}</p> : null}
+          {unanalysed.length > 0 ? (
+            <p className="alert-info mt-3 px-3 py-2 text-xs">
+              {unanalysed.length} file(s) ({unanalysed.map((e) => e.ref).join(", ")})
+              will be listed as present but <strong>not analysed</strong> — this
+              deployment cannot process their contents.
+            </p>
+          ) : null}
         </div>
 
-        {caseData.evidence.length > 0 ? (
-          <ul className="mt-3 divide-y divide-border rounded border border-border bg-surface">
-            {caseData.evidence.map((e) => (
-              <li key={e.id} className="flex flex-wrap items-center gap-3 p-3 text-sm">
-                <span className="font-mono text-xs text-accent">{e.ref}</span>
-                <span className="text-text">{e.filename}</span>
-                <span className="text-xs text-muted">
-                  {e.category} · {fmtSize(e.sizeBytes)}
+        {/* Per-file upload status */}
+        {uploads.length > 0 ? (
+          <ul className="mt-3 space-y-1.5">
+            {uploads.map((u, i) => (
+              <li
+                key={i}
+                className="flex items-center gap-2 rounded border border-border bg-white/70 px-3 py-1.5 text-xs"
+              >
+                {u.status === "uploading" ? (
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-ai text-ai status-pulse" />
+                ) : u.status === "done" ? (
+                  <span className="text-success">✓</span>
+                ) : (
+                  <span className="text-danger">✕</span>
+                )}
+                <span className="truncate text-text">{u.name}</span>
+                <span className="ml-auto shrink-0 text-muted">
+                  {u.status === "uploading"
+                    ? "uploading…"
+                    : u.status === "done"
+                      ? "stored"
+                      : u.message}
                 </span>
-                <span
-                  className={`rounded px-1.5 py-0.5 text-xs ${
-                    e.status === "analyzed"
-                      ? "border border-border text-muted"
-                      : "border border-amber-600 text-amber-500"
-                  }`}
-                >
-                  {e.status === "analyzed" ? "analysed" : "not analysed"}
-                </span>
-                {e.processNote ? (
-                  <span className="basis-full text-xs text-amber-500">{e.processNote}</span>
-                ) : null}
-                <button
-                  onClick={() => deleteEvidence(e.id)}
-                  className="ml-auto text-xs text-muted underline-offset-2 hover:text-red-400 hover:underline"
-                >
-                  delete
-                </button>
               </li>
             ))}
           </ul>
-        ) : (
-          <p className="mt-3 text-sm text-muted">No evidence uploaded yet.</p>
-        )}
-        {unanalysed.length > 0 ? (
-          <p className="mt-2 text-xs text-amber-500">
-            {unanalysed.length} file(s) will be listed as present but unprocessed in the analysis.
-          </p>
+        ) : uploadMsg ? (
+          <p className="mt-3 text-xs text-muted">{uploadMsg}</p>
         ) : null}
+        {uploadMsg && uploads.length > 0 ? (
+          <p className="mt-2 text-xs text-muted">{uploadMsg}</p>
+        ) : null}
+
+        {caseData.evidence.length > 0 ? (
+          <ul className="mt-4 space-y-2">
+            {caseData.evidence.map((e) => (
+              <EvidenceCard key={e.id} item={e} onDelete={deleteEvidence} />
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-4 text-sm text-muted">No evidence uploaded yet.</p>
+        )}
       </section>
 
-      {/* AI analysis workspace */}
-      <section className="mt-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-display text-lg text-text">AI analysis</h2>
+      {/* AI analysis */}
+      <section className="panel mt-5 p-6">
+        <SectionTitle hint={analyzing ? undefined : `${analysedCount} analysed`}>
+          AI analysis
+        </SectionTitle>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-xl text-sm text-muted">
+            The AI reviews the case description and every analysable file, then
+            returns findings that each cite their supporting evidence.
+          </p>
           <button
+            type="button"
             onClick={runAnalysis}
             disabled={analyzing || caseData.evidence.length === 0}
-            className="rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
           >
             {analyzing ? "Analysing…" : "Run analysis"}
           </button>
         </div>
-        {caseData.evidence.length === 0 ? (
-          <p className="mt-2 text-sm text-muted">Upload evidence to enable analysis.</p>
+
+        {analyzing ? (
+          <div className="alert-info mt-4 p-4" role="status">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-ai text-ai status-pulse" />
+              AI analysing {caseData.evidence.length} evidence file(s) —
+              building observations, timeline and connections…
+            </div>
+            <div className="progress-indeterminate relative mt-3 h-1.5 overflow-hidden rounded-full bg-white/70" />
+          </div>
         ) : null}
-        {analysisMsg ? <p className="mt-2 text-sm text-muted">{analysisMsg}</p> : null}
-        {summary ? (
-          <p className="mt-3 rounded border border-border bg-surface p-4 text-sm text-text">
-            {summary}
+        {caseData.evidence.length === 0 && !analyzing ? (
+          <p className="mt-3 text-sm text-muted">Upload evidence to enable analysis.</p>
+        ) : null}
+        {analysisMsg && !analyzing ? (
+          <p
+            className={`mt-3 text-sm ${
+              analysisMsg.startsWith("Analysis complete") ? "text-success" : "text-danger"
+            }`}
+          >
+            {analysisMsg}
           </p>
         ) : null}
       </section>
 
-      {/* Findings + evidence references */}
+      {/* Findings dashboard */}
       {caseData.findings.length > 0 ? (
-        <section className="mt-8">
-          <h2 className="font-display text-lg text-text">
-            Findings ({caseData.findings.length})
-          </h2>
-          <ul className="mt-3 space-y-3">
-            {caseData.findings.map((f) => (
-              <li key={f.id} className="rounded border border-border bg-surface p-4">
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded border border-border px-1.5 py-0.5 text-muted">
-                    {KIND_LABELS[f.kind] ?? f.kind}
-                  </span>
-                  <span className="text-muted">confidence: {f.confidence}</span>
-                  {f.timeLabel ? <span className="text-muted">⏱ {f.timeLabel}</span> : null}
-                  {f.evidenceRefs.length > 0 ? (
-                    <span className="font-mono text-accent">{f.evidenceRefs.join(", ")}</span>
-                  ) : (
-                    <span className="text-muted">case description only</span>
-                  )}
-                </div>
-                <p className="mt-2 text-sm text-text">{f.statement}</p>
-              </li>
-            ))}
-          </ul>
+        <section className="mt-5">
+          <SectionTitle hint={`${caseData.findings.length} findings`}>
+            Findings
+          </SectionTitle>
+
+          {/* Verified observations & clues */}
+          {observations.length > 0 ? (
+            <div className="panel mt-3 p-5">
+              <h3 className="font-display text-base text-text">
+                Verified observations & clues
+              </h3>
+              <p className="mb-3 text-xs text-muted">
+                Grounded in the case description or referenced evidence files.
+              </p>
+              <ul className="space-y-2.5">
+                {observations.map((f) => (
+                  <FindingCard
+                    key={f.id}
+                    finding={f}
+                    evidenceByRef={evidenceByRef}
+                    tone="fact"
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Timeline visualization */}
+          {timeline.length > 0 ? (
+            <div className="panel mt-3 p-5">
+              <h3 className="font-display text-base text-text">Timeline</h3>
+              <p className="mb-4 text-xs text-muted">
+                Ordered events where evidence supports a time.
+              </p>
+              <ol className="relative ml-3 border-l-2 border-dashed border-border-strong">
+                {timeline.map((f) => (
+                  <li key={f.id} className="relative mb-5 pl-5 last:mb-0">
+                    <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-2 border-white bg-accent shadow" />
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="font-mono text-sm font-semibold text-accent">
+                        {f.timeLabel ?? "—"}
+                      </span>
+                      {f.evidenceRefs.map((ref) => (
+                        <span
+                          key={ref}
+                          className="evidence-chip"
+                          title={evidenceByRef.get(ref)?.filename ?? "uploaded evidence"}
+                        >
+                          {ref}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-0.5 text-sm text-text">{f.statement}</p>
+                    <span className="text-xs text-muted">{f.confidence} confidence</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
+
+          {/* Facts vs hypotheses */}
+          {hypotheses.length > 0 ? (
+            <div className="panel mt-3 p-5">
+              <h3 className="font-display text-base text-text">
+                Hypotheses <span className="text-xs font-normal text-[#8a6d00]">— unverified inferences</span>
+              </h3>
+              <p className="mb-3 text-xs text-muted">
+                Plausible interpretations that evidence has not confirmed.
+              </p>
+              <ul className="space-y-2.5">
+                {hypotheses.map((f) => (
+                  <FindingCard
+                    key={f.id}
+                    finding={f}
+                    evidenceByRef={evidenceByRef}
+                    tone="hypothesis"
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Contradictions */}
+          {inconsistencies.length > 0 ? (
+            <div className="panel mt-3 border-l-4 border-l-danger p-5">
+              <h3 className="font-display text-base text-text">
+                Contradictions & inconsistencies
+              </h3>
+              <ul className="mt-3 space-y-2.5">
+                {inconsistencies.map((f) => (
+                  <FindingCard
+                    key={f.id}
+                    finding={f}
+                    evidenceByRef={evidenceByRef}
+                    tone="plain"
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Connections */}
+          {connections.length > 0 ? (
+            <div className="panel mt-3 p-5">
+              <h3 className="font-display text-base text-text">
+                Evidence connections
+              </h3>
+              <ul className="mt-3 space-y-2.5">
+                {connections.map((f) => (
+                  <FindingCard
+                    key={f.id}
+                    finding={f}
+                    evidenceByRef={evidenceByRef}
+                    tone="plain"
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Missing evidence alert */}
+          {missing.length > 0 ? (
+            <div className="panel mt-3 border-l-4 border-l-[var(--evidence)] bg-[rgba(242,194,0,0.06)] p-5">
+              <h3 className="font-display text-base text-text">
+                Missing evidence & next steps
+              </h3>
+              <ul className="mt-3 space-y-2">
+                {missing.map((f) => (
+                  <li
+                    key={f.id}
+                    className="flex flex-wrap items-baseline gap-2 text-sm text-text"
+                  >
+                    <span className="text-[#8a6d00]">◆</span>
+                    <span>{f.statement}</span>
+                    {f.evidenceRefs.map((ref) => (
+                      <span key={ref} className="evidence-chip">
+                        {ref}
+                      </span>
+                    ))}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
       {/* Follow-up Q&A */}
-      <section className="mt-8">
-        <h2 className="font-display text-lg text-text">Ask the investigator AI</h2>
-        <div className="mt-2 flex gap-2">
+      <section className="panel mt-5 p-6">
+        <SectionTitle hint={qaHistory.length ? `${qaHistory.length} asked` : undefined}>
+          Ask the investigator AI
+        </SectionTitle>
+        <div className="mt-3 flex gap-2">
           <input
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
@@ -391,39 +747,46 @@ export default function InvestigationWorkspacePage() {
               if (e.key === "Enter") askQuestion(question);
             }}
             placeholder="e.g. What happened in this incident?"
-            className="flex-1 rounded border border-border bg-surface px-3 py-2 text-sm text-text placeholder:text-muted"
+            aria-label="Follow-up question"
+            className="min-w-0 flex-1 rounded-lg border border-border bg-white/80 px-3 py-2.5 text-sm text-text placeholder:text-muted"
           />
           <button
+            type="button"
             onClick={() => askQuestion(question)}
             disabled={asking || question.trim().length < 2}
-            className="rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
           >
             {asking ? "…" : "Ask"}
           </button>
         </div>
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-2.5 flex flex-wrap gap-2">
           {SUGGESTED_QUESTIONS.map((q) => (
             <button
               key={q}
+              type="button"
               onClick={() => askQuestion(q)}
               disabled={asking}
-              className="rounded border border-border px-2 py-1 text-xs text-muted hover:text-text disabled:opacity-50"
+              className="rounded-full border border-border bg-white/70 px-3 py-1 text-xs text-muted transition hover:border-accent hover:text-text disabled:opacity-50"
             >
               {q}
             </button>
           ))}
         </div>
-        {qaMsg ? <p className="mt-2 text-sm text-red-400">{qaMsg}</p> : null}
+        {qaMsg ? <p className="alert-danger mt-3 px-3 py-2 text-sm">{qaMsg}</p> : null}
         {qaHistory.length > 0 ? (
           <ul className="mt-4 space-y-3">
             {qaHistory.map((h, i) => (
-              <li key={i} className="rounded border border-border bg-surface p-4 text-sm">
+              <li key={i} className="rounded-lg border border-border bg-white/75 p-4 text-sm">
                 <p className="text-muted">Q: {h.question}</p>
                 <p className="mt-1 text-text">
                   A: {h.answer}
                   {Array.isArray(h.evidenceRefs) && h.evidenceRefs.length > 0 ? (
-                    <span className="ml-2 font-mono text-xs text-accent">
-                      [{h.evidenceRefs.join(", ")}]
+                    <span className="ml-2 inline-flex gap-1 align-middle">
+                      {h.evidenceRefs.map((r) => (
+                        <span key={r} className="evidence-chip">
+                          {r}
+                        </span>
+                      ))}
                     </span>
                   ) : null}
                 </p>
@@ -433,28 +796,59 @@ export default function InvestigationWorkspacePage() {
         ) : null}
       </section>
 
-      {/* Investigation report */}
-      <section className="mt-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-display text-lg text-text">Investigation report</h2>
+      {/* Report */}
+      <section className="panel mt-5 p-6">
+        <SectionTitle>Investigation report</SectionTitle>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
+            type="button"
             onClick={generateReport}
             disabled={generating}
-            className="rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
           >
-            {generating ? "Generating…" : caseData.report ? "Regenerate report" : "Generate report"}
+            {generating
+              ? "Generating…"
+              : caseData.report
+                ? "Regenerate report"
+                : "Generate report"}
           </button>
+          {caseData.report ? (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  downloadText(
+                    `${caseData.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-report.md`,
+                    caseData.report ?? "",
+                  )
+                }
+                className="rounded-lg border border-border-strong bg-white/70 px-4 py-2.5 text-sm font-semibold text-text transition hover:border-accent"
+              >
+                ↓ Download (.md)
+              </button>
+              <Link
+                href={`/investigations/${id}/report`}
+                className="text-sm font-medium text-accent underline-offset-2 hover:underline"
+              >
+                Open full report view
+              </Link>
+            </>
+          ) : null}
         </div>
-        {reportMsg ? <p className="mt-2 text-sm text-muted">{reportMsg}</p> : null}
+        {reportMsg ? <p className="mt-3 text-sm text-muted">{reportMsg}</p> : null}
         {caseData.report ? (
-          <article className="mt-3 rounded border border-border bg-surface p-5">
+          <article className="mt-4 rounded-lg border border-border bg-white/75 p-5">
             <p className="mb-3 text-xs text-muted">
               Generated {new Date(caseData.reportGeneratedAt!).toLocaleString()}
             </p>
-            <div className="whitespace-pre-wrap font-sans text-sm text-text">{caseData.report}</div>
+            <div className="max-h-[32rem] overflow-auto whitespace-pre-wrap font-sans text-sm leading-relaxed text-text">
+              {caseData.report}
+            </div>
           </article>
         ) : (
-          <p className="mt-2 text-sm text-muted">No report yet.</p>
+          <p className="mt-3 text-sm text-muted">
+            No report yet — generate one after running the analysis.
+          </p>
         )}
       </section>
     </main>

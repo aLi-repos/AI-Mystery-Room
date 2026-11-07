@@ -84,21 +84,62 @@ export default async function DashboardPage() {
         {user.isGuest ? (
           <p className="mt-2 text-sm text-muted">
             You&apos;re playing as a guest.{" "}
-            <Link href="/register" className="text-accent underline-offset-2 hover:underline">
+            <Link href="/register" className="font-medium text-accent underline-offset-2 hover:underline">
               Create an account
             </Link>{" "}
             to keep your cases after your guest session expires.
           </p>
         ) : (
-          <p className="mt-2 text-sm text-muted">Pick up where you left off.</p>
+          <p className="mt-2 text-sm text-muted">
+            Open a new investigation or continue an existing case file.
+          </p>
         )}
+      </section>
+
+      {/* Primary actions */}
+      <section className="mt-8 grid gap-4 sm:grid-cols-2">
+        <Link
+          href="/investigations/new"
+          className="panel group p-6 transition hover:border-accent"
+        >
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-accent-soft text-accent">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </span>
+          <h2 className="mt-3 font-display text-xl text-text">New investigation</h2>
+          <p className="mt-1 text-sm text-muted">
+            Describe the case, choose evidence types, upload files and run AI
+            analysis.
+          </p>
+          <span className="mt-3 inline-block text-sm font-medium text-accent">
+            Start a case →
+          </span>
+        </Link>
+        <Link
+          href="/investigations"
+          className="panel group p-6 transition hover:border-accent"
+        >
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-evidence-soft text-[#7a5f00]">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 6h16M4 12h16M4 18h10" />
+            </svg>
+          </span>
+          <h2 className="mt-3 font-display text-xl text-text">Investigation history</h2>
+          <p className="mt-1 text-sm text-muted">
+            Browse past cases, findings and saved reports.
+          </p>
+          <span className="mt-3 inline-block text-sm font-medium text-accent">
+            Open history →
+          </span>
+        </Link>
       </section>
 
       <section className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
         {STATS.map((stat) => (
           <div
             key={stat.label}
-            className="rounded border border-border bg-surface p-4"
+            className="panel p-4"
           >
             <p className="text-xs uppercase tracking-wide text-muted">
               {stat.label}
@@ -114,7 +155,7 @@ export default async function DashboardPage() {
       <section className="mt-10">
         <h2 className="font-display text-lg text-text">Case file</h2>
         {library.state === "ok" ? (
-          <article className="mt-3 rounded border border-border bg-surface p-5">
+          <article className="panel mt-3 p-5">
             <h3 className="font-display text-xl text-text">{library.title}</h3>
             <p className="mt-1 text-sm text-muted">{library.tagline}</p>
             <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2 text-sm text-muted">
@@ -131,12 +172,20 @@ export default async function DashboardPage() {
                 <dd className="inline text-text">Easy · Medium · Hard</dd>
               </div>
             </dl>
-            <p className="mt-4 text-xs text-muted">
-              Case selection opens with the mystery-room screens.
-            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/play"
+                className="rounded bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
+              >
+                Play mystery
+              </Link>
+              <span className="self-center text-xs text-muted">
+                The classic five-stage mystery room.
+              </span>
+            </div>
           </article>
         ) : (
-          <p className="mt-3 rounded border border-border bg-surface p-5 text-sm text-muted">
+          <p className="panel mt-3 p-5 text-sm text-muted">
             The mystery library is unavailable right now
             {process.env.DATABASE_URL ? " (database error)." : " (no database configured)."}
           </p>

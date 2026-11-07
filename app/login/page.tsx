@@ -48,7 +48,7 @@ function LoginForm() {
           autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="mt-1 w-full rounded border border-border bg-surface px-3 py-2 text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          className="mt-1 w-full rounded border border-border bg-white/70 px-3 py-2 text-text"
         />
       </div>
       <div>
@@ -62,18 +62,18 @@ function LoginForm() {
           autoComplete="current-password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="mt-1 w-full rounded border border-border bg-surface px-3 py-2 text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          className="mt-1 w-full rounded border border-border bg-white/70 px-3 py-2 text-text"
         />
       </div>
       {error ? (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="alert-danger px-3 py-2 text-sm">
           {error}
         </p>
       ) : null}
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded bg-accent px-4 py-2 font-medium text-bg transition-opacity hover:opacity-90 disabled:opacity-60"
+        className="w-full rounded bg-accent px-4 py-2.5 font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
       >
         {pending ? "Signing in…" : "Sign in"}
       </button>
@@ -84,18 +84,21 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <main className="flex flex-1 items-center justify-center px-6 py-16">
-      <div className="w-full max-w-sm rounded border border-border bg-surface p-6">
-        <h1 className="font-display text-2xl text-text">Sign in</h1>
+      <div className="panel w-full max-w-sm animate-rise p-7">
+        <span className="inline-flex items-center gap-2 rounded-full border border-border bg-white/70 px-2.5 py-0.5 text-xs font-medium text-accent">
+          Investigator access
+        </span>
+        <h1 className="mt-4 font-display text-2xl text-text">Sign in</h1>
         <p className="mt-1 text-sm text-muted">
-          Welcome back to the mystery room.
+          Continue to your investigations, evidence and reports.
         </p>
         <Suspense>
           <LoginForm />
         </Suspense>
         <p className="mt-6 text-sm text-muted">
           No account yet?{" "}
-          <Link href="/register" className="text-accent underline-offset-2 hover:underline">
-            Register
+          <Link href="/register" className="font-medium text-accent underline-offset-2 hover:underline">
+            Create one
           </Link>
         </p>
       </div>

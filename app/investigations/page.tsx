@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/LogoutButton";
 
 /**
- * Investigation Dashboard — list of the user's investigations + create entry.
- * Client-side fetch (session cookie is httpOnly; proxy guards the route).
+ * Investigation history — the user's past and current cases with evidence /
+ * finding counts and report status. Client-side fetch (httpOnly session
+ * cookie; proxy.ts guards the route).
  */
 
 type Item = {
@@ -18,6 +19,15 @@ type Item = {
   hasReport: boolean;
   evidenceCount: number;
   findingsCount: number;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  video: "CCTV/video",
+  image: "photos",
+  pdf: "PDF",
+  text: "text",
+  audio: "audio",
+  other: "other",
 };
 
 export default function InvestigationsPage() {
@@ -55,7 +65,10 @@ export default function InvestigationsPage() {
           MysteryAI
         </Link>
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="text-sm text-muted hover:text-text">
+          <Link
+            href="/dashboard"
+            className="text-sm text-muted transition hover:text-text"
+          >
             Dashboard
           </Link>
           <LogoutButton />
@@ -64,14 +77,19 @@ export default function InvestigationsPage() {
 
       <section className="mt-10 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl text-text">Investigations</h1>
+          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-white/70 px-2.5 py-0.5 text-xs font-medium text-accent">
+            Case archive
+          </span>
+          <h1 className="mt-3 font-display text-3xl text-text">
+            Investigation history
+          </h1>
           <p className="mt-1 text-sm text-muted">
-            Create a case, upload evidence, and get AI-grounded findings.
+            Every case you have opened, with evidence, findings and reports.
           </p>
         </div>
         <Link
           href="/investigations/new"
-          className="rounded bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          className="rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 active:scale-[0.98]"
         >
           + New investigation
         </Link>
@@ -79,42 +97,69 @@ export default function InvestigationsPage() {
 
       <section className="mt-8">
         {error ? (
-          <p className="rounded border border-border bg-surface p-4 text-sm text-muted">{error}</p>
+          <p className="alert-danger p-4 text-sm">{error}</p>
         ) : items === null ? (
-          <p className="text-sm text-muted">Loading…</p>
+          <div className="panel relative h-24 overflow-hidden p-4">
+            <div className="progress-indeterminate absolute inset-x-4 top-1/2 h-1.5 overflow-hidden rounded-full bg-border" />
+            <p className="mt-8 text-sm text-muted">Loading case archive…</p>
+          </div>
         ) : items.length === 0 ? (
-          <div className="rounded border border-border bg-surface p-6 text-sm text-muted">
-            No investigations yet.{" "}
-            <Link href="/investigations/new" className="text-accent underline-offset-2 hover:underline">
+          <div className="panel p-8 text-center">
+            <p className="font-display text-lg text-text">No cases yet</p>
+            <p className="mt-1 text-sm text-muted">
+              Your investigation archive is empty — open your first case.
+            </p>
+            <Link
+              href="/investigations/new"
+              className="mt-5 inline-block rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110"
+            >
               Create your first case
             </Link>
-            .
           </div>
         ) : (
-          <ul className="grid gap-3">
-            {items.map((item) => (
-              <li key={item.id}>
+          <ul className="grid gap-4">
+            {items.map((item, i) => (
+              <li key={item.id} className="animate-rise" style={{ animationDelay: `${i * 50}ms` }}>
                 <Link
                   href={`/investigations/${item.id}`}
-                  className="block rounded border border-border bg-surface p-5 hover:border-accent"
+                  className="panel block p-5 transition hover:border-accent"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="font-display text-lg text-text">{item.title}</h2>
                     <span className="text-xs text-muted">
-                      {new Date(item.createdAt).toLocaleDateString()}
+                      opened {new Date(item.createdAt).toLocaleDateString()}
                     </span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <div className="mt-2 flex flex-wrap gap-1.5">
                     {item.categories.map((c) => (
-                      <span key={c} className="rounded border border-border px-1.5 py-0.5 text-muted">
-                        {c}
+                      <span
+                        key={c}
+                        className="rounded-full border border-border bg-white/70 px-2 py-0.5 text-xs text-muted"
+                      >
+                        {CATEGORY_LABELS[c] ?? c}
                       </span>
                     ))}
                   </div>
-                  <p className="mt-3 text-xs text-muted">
-                    {item.evidenceCount} evidence · {item.findingsCount} findings ·{" "}
-                    {item.hasReport ? "report ready" : "no report"}
-                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-xs text-muted">
+                    <span>
+                      <strong className="text-text">{item.evidenceCount}</strong> evidence
+                    </span>
+                    <span>
+                      <strong className="text-text">{item.findingsCount}</strong> findings
+                    </span>
+                    {item.hasReport ? (
+                      <span className="rounded-full border border-[rgba(44,154,91,0.45)] bg-[rgba(44,154,91,0.1)] px-2 py-0.5 font-medium text-success">
+                        report ready
+                      </span>
+                    ) : (
+                      <span className="rounded-full border border-border bg-white/70 px-2 py-0.5">
+                        no report
+                      </span>
+                    )}
+                    <span className="ml-auto font-medium text-accent">
+                      Open case →
+                    </span>
+                  </div>
                 </Link>
               </li>
             ))}

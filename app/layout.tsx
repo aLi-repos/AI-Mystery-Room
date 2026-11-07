@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
+import WorkspaceBackdrop from "@/components/WorkspaceBackdrop";
 import "./globals.css";
 
 const inter = Inter({
@@ -13,9 +14,9 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "MysteryAI — The AI Mystery Room",
+  title: "MysteryAI — AI Investigation Assistant",
   description:
-    "Solve a five-stage mystery case file, with live AI-generated hints when you get stuck.",
+    "Create an investigation, upload case evidence, and get AI findings with evidence references, timelines and a structured report.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${inter.variable} ${spaceGrotesk.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-bg text-text">
+        <WorkspaceBackdrop />
         {children}
       </body>
     </html>
