@@ -3,16 +3,45 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 
+type SessionData = {
+  id?: string;
+  currentStageNumber?: number;
+  stageProgress?: StageProgressRow[];
+  [key: string]: unknown;
+};
+type StageProgressRow = {
+  stage?: { stageNumber?: number; [key: string]: unknown };
+  [key: string]: unknown;
+};
+type StageData = {
+  id?: string;
+  title?: string;
+  stageNumber?: number;
+  narrative?: string;
+  puzzlePrompt?: string;
+  puzzleType?: string;
+  puzzleOptions?: string[];
+  clues?: { content?: string }[];
+  progress?: StageProgressRow;
+  [key: string]: unknown;
+};
+type HintData = {
+  content?: string;
+  level?: number;
+  source?: string;
+  [key: string]: unknown;
+} | null;
+
 function GameUI() {
   const params = useSearchParams();
   const router = useRouter();
   const mysteryId = params.get("mysteryId");
   const difficulty = params.get("difficulty") || "easy";
-  const [session, setSession] = useState<any>(null);
-  const [stage, setStage] = useState<any>(null);
+  const [session, setSession] = useState<SessionData | null>(null);
+  const [stage, setStage] = useState<StageData | null>(null);
   const [answer, setAnswer] = useState("");
   const [feedback, setFeedback] = useState("");
-  const [hint, setHint] = useState<any>(null);
+  const [hint, setHint] = useState<HintData>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,7 +70,7 @@ function GameUI() {
         const s = data.session || data;
         // Find current stage from progress
         const currentNum = s.currentStageNumber || 1;
-        const stageRow = s.stageProgress?.find((p: any) => p.stage?.stageNumber === currentNum);
+        const stageRow = s.stageProgress?.find((p: StageProgressRow) => p.stage?.stageNumber === currentNum);
         if (stageRow && stageRow.stage) {
           setStage({ ...stageRow.stage, progress: stageRow });
         }
@@ -109,8 +138,8 @@ function GameUI() {
       <div className="border border-border rounded-xl p-6 bg-surface mb-6">
         <h3 className="font-bold mb-2">Clues</h3>
         <ul className="list-disc pl-5 space-y-1 text-sm text-muted">
-          {stage?.clues?.map((c: any) => (
-            <li key={c.id || c.clueNumber}>{c.content}</li>
+          {stage?.clues?.map((c, i) => (
+            <li key={i}>{c.content}</li>
           ))}
         </ul>
       </div>

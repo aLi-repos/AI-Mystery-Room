@@ -40,7 +40,7 @@ CREATE TYPE "EvaluatedBy" AS ENUM ('deterministic');
 -- CreateTable
 CREATE TABLE "users" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "email" CITEXT,
+    "email" VARCHAR(200),
     "password_hash" TEXT,
     "display_name" VARCHAR(40) NOT NULL,
     "is_guest" BOOLEAN NOT NULL DEFAULT false,

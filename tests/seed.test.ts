@@ -14,7 +14,7 @@ import {
   SeedValidationError,
   validateMysteryData,
 } from "@/prisma/seed-data";
-import { runSeed } from "@/prisma/seed";
+import { runSeed, type SeedClient } from "@/prisma/seed";
 import { createFakeDb, type FakeDb } from "./helpers/fakePrisma";
 
 describe("MVP mystery content (D9/D10) — pure validation", () => {
@@ -82,14 +82,14 @@ describe("Seed script — repeatable upserts (MOCKED DB)", () => {
         (sum, stage) => sum + ((stage.hints as unknown[]) ?? []).length,
         0,
       ),
-      answers: (await (db as any).stageAnswer.findMany()).length,
-      clues: (await (db as any).clue.findMany()).length,
+      answers: (await db.stageAnswer.findMany()).length,
+      clues: (await db.clue.findMany()).length,
     };
   }
 
   it("produces the required row counts on first run", async () => {
     const db = createFakeDb();
-    const report = await runSeed(db as any);
+    const report = await runSeed(db as unknown as SeedClient);
 
     expect(report.stages).toBe(5);
     expect(report.hints).toBe(15); // 5 stages × 3 hints
@@ -109,10 +109,10 @@ describe("Seed script — repeatable upserts (MOCKED DB)", () => {
 
   it("running twice does NOT create duplicates (upsert idempotency)", async () => {
     const db = createFakeDb();
-    await runSeed(db as any);
+    await runSeed(db as unknown as SeedClient);
     const first = await seedCounts(db);
 
-    const secondReport = await runSeed(db as any);
+    const secondReport = await runSeed(db as unknown as SeedClient);
     const second = await seedCounts(db);
 
     expect(second).toEqual(first);
@@ -126,10 +126,10 @@ describe("Seed script — repeatable upserts (MOCKED DB)", () => {
 
   it("three consecutive runs stay stable", async () => {
     const db = createFakeDb();
-    await runSeed(db as any);
-    await runSeed(db as any);
+    await runSeed(db as unknown as SeedClient);
+    await runSeed(db as unknown as SeedClient);
     const before = await seedCounts(db);
-    await runSeed(db as any);
+    await runSeed(db as unknown as SeedClient);
     expect(await seedCounts(db)).toEqual(before);
   });
 

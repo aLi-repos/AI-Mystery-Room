@@ -16,7 +16,7 @@ import { sessionCookieName } from "@/lib/auth/cookies";
  *  - `/api/*` is NOT proxied — every API route authenticates itself
  *    (defence in depth: a proxy bypass cannot grant API access).
  */
-const PROTECTED_PREFIXES = ["/dashboard", "/mysteries", "/play", "/results", "/history"];
+const PROTECTED_PREFIXES = ["/dashboard", "/mysteries", "/play", "/results", "/history", "/investigations"];
 const AUTH_PAGES = ["/login", "/register"];
 
 export async function proxy(request: NextRequest) {
@@ -68,6 +68,7 @@ export const config = {
     "/play/:path*",
     "/results/:path*",
     "/history/:path*",
+    "/investigations/:path*",
     "/login",
     "/register",
   ],

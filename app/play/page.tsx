@@ -3,7 +3,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 
 export default function PlayPage() {
-  const [mysteries, setMysteries] = useState<any[]>([]);
+  const [mysteries, setMysteries] = useState<
+    { id: string; title?: string; tagline?: string; stageCount?: number }[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export default function PlayPage() {
         ) : mysteries.length === 0 ? (
           <div className="text-muted">No mysteries published. (DB seed required)</div>
         ) : (
-          mysteries.map((m: any) => (
+          mysteries.map((m) => (
             <div key={m.id} className="border border-border rounded-xl p-6 bg-surface hover:border-accent transition">
               <h2 className="font-display text-2xl">{m.title}</h2>
               <p className="text-muted mt-1">{m.tagline}</p>

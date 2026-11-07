@@ -45,3 +45,6 @@ next-env.d.ts
 
 # prisma — generated client (recreated by `prisma generate`)
 /prisma/generated/
+
+.vercel
+.env*

@@ -62,7 +62,7 @@ describe("Prisma schema + migration (real CLI, offline)", () => {
     expect(output).toContain("is valid");
   });
 
-  it("regenerated DDL is a subset of the committed baseline migration", () => {
+  it("regenerated DDL is a subset of the committed migrations", () => {
     const generated = prisma([
       "migrate",
       "diff",
@@ -71,7 +71,15 @@ describe("Prisma schema + migration (real CLI, offline)", () => {
       "--script",
     ]);
 
-    const migrationSql = fs.readFileSync(migrationFile, "utf8");
+    // Aggregate ALL committed migration files (init + investigation MVP).
+    const migrationsDir = path.join(root, "prisma", "migrations");
+    const migrationSql = fs
+      .readdirSync(migrationsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) =>
+        fs.readFileSync(path.join(migrationsDir, entry.name, "migration.sql"), "utf8"),
+      )
+      .join("\n;\n");
 
     const migrationStatements = new Set(statements(migrationSql));
     const missing = statements(generated).filter(

@@ -12,6 +12,31 @@ import { randomUUID } from "node:crypto";
 
 type Row = Record<string, unknown>;
 
+/** Projects a row onto a `select` shape (top-level keys only). */
+function pick(row: Row, select: Row): Row {
+  const out: Row = {};
+  for (const key of Object.keys(select)) {
+    if (select[key]) out[key] = row[key];
+  }
+  return out;
+}
+
+/** `pick` + Prisma's `_count: { select: {...} }` nested shape. */
+function withCount(row: Row, select: Row, tables: Record<string, Row[]>): Row {
+  const out = pick(row, select);
+  if (select._count) {
+    const countSelect = select._count as Row;
+    const counts: Row = {};
+    for (const rel of Object.keys(countSelect)) {
+      if (!countSelect[rel]) continue;
+      counts[rel] = tables[rel === "evidence" ? "evidence" : rel === "findings" ? "finding" : rel]
+        ?.filter((r) => r.investigationId === row.id).length ?? 0;
+    }
+    out._count = counts;
+  }
+  return out;
+}
+
 function matches(row: Row, where: Row | undefined): boolean {
   if (!where) return true;
   for (const [key, condition] of Object.entries(where)) {
@@ -44,6 +69,9 @@ export function createFakeDb() {
     stageAnswer: [],
     hint: [],
     gameSession: [],
+    investigation: [],
+    evidence: [],
+    finding: [],
   };
 
   function insert(table: string, data: Row): Row {
@@ -222,6 +250,117 @@ export function createFakeDb() {
       tables.gameSession.filter((row) => matches(row, args.where)).length,
   };
 
+  const investigation = {
+    findMany: async (
+      args: { where?: Row; orderBy?: Row; take?: number; select?: Row } = {},
+    ) => {
+      let rows = tables.investigation.filter((row) => matches(row, args.where));
+      if (args.orderBy?.createdAt === "desc") {
+        rows = [...rows].sort(
+          (a, b) =>
+            (b.createdAt as Date).getTime() - (a.createdAt as Date).getTime(),
+        );
+      }
+      if (args.take) rows = rows.slice(0, args.take);
+      return args.select
+        ? rows.map((r) => withCount(r, args.select!, tables))
+        : rows;
+    },
+    findFirst: async (args: { where?: Row; select?: Row } = {}) => {
+      const row = findFirst("investigation", args);
+      return row && args.select ? pick(row, args.select) : row;
+    },
+    findUnique: async (args: { where: Row }) => findFirst("investigation", args),
+    create: async (args: { data: Row; select?: Row }) => {
+      const row = insert("investigation", {
+        qaHistory: [],
+        report: null,
+        reportGeneratedAt: null,
+        ...args.data,
+      });
+      return args.select ? pick(row, args.select) : row;
+    },
+    update: async (args: { where: Row; data: Row }) => {
+      const row = findFirst("investigation", { where: args.where });
+      if (!row) throw new Error("FakePrisma: investigation not found");
+      Object.assign(row, args.data);
+      return row;
+    },
+    delete: async (args: { where: Row }) => {
+      const idx = tables.investigation.findIndex((r) => matches(r, args.where));
+      if (idx === -1) throw new Error("FakePrisma: investigation not found");
+      const [row] = tables.investigation.splice(idx, 1);
+      // Cascade: evidence + findings
+      for (const t of ["evidence", "finding"]) {
+        for (let i = tables[t].length - 1; i >= 0; i--) {
+          if (tables[t][i]!.investigationId === row!.id) tables[t].splice(i, 1);
+        }
+      }
+      return row;
+    },
+    count: async (args: { where?: Row } = {}) =>
+      tables.investigation.filter((row) => matches(row, args.where)).length,
+  };
+
+  const evidence = {
+    findMany: async (args: { where?: Row; orderBy?: Row; select?: Row } = {}) => {
+      let rows = tables.evidence.filter((row) => matches(row, args.where));
+      if (args.orderBy?.createdAt === "asc") {
+        rows = [...rows].sort(
+          (a, b) =>
+            (a.createdAt as Date).getTime() - (b.createdAt as Date).getTime(),
+        );
+      }
+      return args.select ? rows.map((r) => pick(r, args.select!)) : rows;
+    },
+    findFirst: async (args: { where?: Row; select?: Row } = {}) => {
+      const row = findFirst("evidence", args);
+      return row && args.select ? pick(row, args.select) : row;
+    },
+    create: async (args: { data: Row; select?: Row }) => {
+      const row = insert("evidence", args.data);
+      return args.select ? pick(row, args.select) : row;
+    },
+    delete: async (args: { where: Row }) => {
+      const idx = tables.evidence.findIndex((r) => matches(r, args.where));
+      if (idx === -1) throw new Error("FakePrisma: evidence not found");
+      const [row] = tables.evidence.splice(idx, 1);
+      return row;
+    },
+    count: async (args: { where?: Row } = {}) =>
+      tables.evidence.filter((row) => matches(row, args.where)).length,
+    updateMany: async (args: { where?: Row; data: Row }) => {
+      const rows = tables.evidence.filter((row) => matches(row, args.where));
+      for (const row of rows) Object.assign(row, args.data);
+      return { count: rows.length };
+    },
+  };
+
+  const finding = {
+    findMany: async (args: { where?: Row; orderBy?: Row; select?: Row } = {}) => {
+      let rows = tables.finding.filter((row) => matches(row, args.where));
+      if (args.orderBy?.createdAt === "asc") {
+        rows = [...rows].sort(
+          (a, b) =>
+            (a.createdAt as Date).getTime() - (b.createdAt as Date).getTime(),
+        );
+      }
+      return args.select ? rows.map((r) => pick(r, args.select!)) : rows;
+    },
+    create: async (args: { data: Row }) => insert("finding", args.data),
+    createMany: async (args: { data: Row[] }) => {
+      for (const data of args.data) insert("finding", data);
+      return { count: args.data.length };
+    },
+    deleteMany: async (args: { where?: Row }) => {
+      const before = tables.finding.length;
+      tables.finding = tables.finding.filter((row) => !matches(row, args.where));
+      return { count: before - tables.finding.length };
+    },
+    count: async (args: { where?: Row } = {}) =>
+      tables.finding.filter((row) => matches(row, args.where)).length,
+  };
+
   const client = {
     user,
     mystery,
@@ -230,6 +369,9 @@ export function createFakeDb() {
     stageAnswer,
     hint,
     gameSession,
+    investigation,
+    evidence,
+    finding,
     $transaction: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> =>
       fn(client),
     // Raw probe used by /api/health — mocked as "database reachable".

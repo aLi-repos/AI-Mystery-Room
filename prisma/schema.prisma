@@ -70,6 +70,35 @@ enum EvaluatedBy {
   deterministic
 }
 
+/// Evidence categories selectable per investigation (AI investigation mode).
+enum EvidenceCategory {
+  video
+  image
+  pdf
+  text
+  audio
+  other
+}
+
+/// `unprocessed` = stored but NOT analysed (format unsupported) — surfaced
+/// honestly in findings/report, never claimed as analysed.
+enum EvidenceStatus {
+  stored
+  analyzed
+  unprocessed
+}
+
+/// Kinds of AI findings; every finding references supporting evidence ids.
+enum FindingKind {
+  fact
+  observation
+  hypothesis
+  inconsistency
+  timeline
+  missing_evidence
+  link
+}
+
 // ---------------------------------------------------------------------------
 // Entities (§6.2)
 // ---------------------------------------------------------------------------
@@ -81,17 +110,79 @@ enum EvaluatedBy {
 ///  - UNIQUE (lower(email)) WHERE email IS NOT NULL  (citext column)
 model User {
   id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email          String?   @db.Citext
+  email          String?   @db.VarChar(200)
   passwordHash   String?   @map("password_hash")
   displayName    String    @map("display_name") @db.VarChar(40)
   isGuest        Boolean   @default(false) @map("is_guest")
   guestExpiresAt DateTime? @map("guest_expires_at") @db.Timestamptz
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  mysteries Mystery[]
-  sessions  GameSession[]
+  mysteries       Mystery[]
+  sessions        GameSession[]
+  investigations Investigation[]
 
   @@map("users")
+}
+
+/// An investigation case `[AI investigation MVP]`.
+model Investigation {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String             @map("user_id") @db.Uuid
+  title             String             @db.VarChar(120)
+  caseDescription   String             @map("case_description") @db.Text
+  categories        EvidenceCategory[]
+  report            String?            @db.Text
+  reportGeneratedAt DateTime?          @map("report_generated_at") @db.Timestamptz
+  qaHistory         Json               @default("[]") @map("qa_history")
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evidence Evidence[]
+  findings Finding[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("investigations")
+}
+
+/// Uploaded evidence file; bytes stored server-side in Postgres (BYTEA).
+model Evidence {
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  investigationId String           @map("investigation_id") @db.Uuid
+  ref             String           @db.VarChar(10) // stable prompt ref, e.g. "EV1"
+  category        EvidenceCategory
+  filename        String           @db.VarChar(255)
+  mimeType        String           @map("mime_type") @db.VarChar(100)
+  sizeBytes       Int              @map("size_bytes")
+  data            Bytes
+  textContent     String?          @map("content_text") @db.Text
+  status          EvidenceStatus   @default(stored)
+  processNote     String?          @map("process_note") @db.VarChar(300)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+
+  @@unique([investigationId, ref])
+  @@index([investigationId])
+  @@map("evidence")
+}
+
+/// AI finding; `evidenceIds` must only contain ids of actually uploaded
+/// evidence (server-side validated — unknown refs are dropped).
+model Finding {
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  investigationId String        @map("investigation_id") @db.Uuid
+  kind            FindingKind
+  statement       String        @db.Text
+  timeLabel       String?       @map("time_label") @db.VarChar(120) // timeline entries
+  evidenceIds     String[]      @map("evidence_ids") @db.Uuid
+  confidence      String        @db.VarChar(10) @default("medium")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  investigation Investigation @relation(fields: [investigationId], references: [id], onDelete: Cascade)
+
+  @@index([investigationId])
+  @@map("findings")
 }
 
 /// Mystery scenarios `[W]` — MVP seeds exactly one published row (D4).

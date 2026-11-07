@@ -9,7 +9,9 @@
  */
 export const SESSION_MAX_AGE_SECONDS = 7 * 24 * 60 * 60; // 7 days (§9.9)
 
-export function useSecureCookies(): boolean {
+// NOTE: named without a `use` prefix — this is a plain env helper, not a
+// React hook (the react-hooks rule would otherwise misfire on call sites).
+export function secureCookiesEnabled(): boolean {
   if (process.env.VERCEL) return true;
   const nextAuthUrl = process.env.NEXTAUTH_URL;
   if (nextAuthUrl) return nextAuthUrl.startsWith("https://");
@@ -17,7 +19,7 @@ export function useSecureCookies(): boolean {
 }
 
 export function sessionCookieName(): string {
-  return `${useSecureCookies() ? "__Secure-" : ""}next-auth.session-token`;
+  return `${secureCookiesEnabled() ? "__Secure-" : ""}next-auth.session-token`;
 }
 
 export function sessionCookieOptions(): {
@@ -30,7 +32,7 @@ export function sessionCookieOptions(): {
   return {
     httpOnly: true,
     sameSite: "lax",
-    secure: useSecureCookies(),
+    secure: secureCookiesEnabled(),
     path: "/",
     maxAge: SESSION_MAX_AGE_SECONDS,
   };

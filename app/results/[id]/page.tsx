@@ -6,7 +6,12 @@ import Link from "next/link";
 export default function ResultsPage() {
   const params = useParams();
   const id = params?.id as string;
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<{
+    status?: string;
+    totalScore?: number;
+    difficulty?: string;
+    mystery?: { title?: string };
+  } | null>(null);
 
   useEffect(() => {
     if (!id) return;

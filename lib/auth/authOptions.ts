@@ -3,8 +3,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { authenticate } from "@/lib/auth/authorize";
 import {
   SESSION_MAX_AGE_SECONDS,
+  secureCookiesEnabled,
   sessionCookieName,
-  useSecureCookies,
 } from "@/lib/auth/cookies";
 import "./types";
 
@@ -26,14 +26,14 @@ export const authOptions: NextAuthOptions = {
     strategy: "jwt",
     maxAge: SESSION_MAX_AGE_SECONDS, // §9.9 — 7-day absolute sessions
   },
-  useSecureCookies: useSecureCookies(),
+  useSecureCookies: secureCookiesEnabled(),
   cookies: {
     sessionToken: {
       name: sessionCookieName(),
       options: {
         httpOnly: true,
         sameSite: "lax",
-        secure: useSecureCookies(),
+        secure: secureCookiesEnabled(),
         path: "/",
         maxAge: SESSION_MAX_AGE_SECONDS,
       },

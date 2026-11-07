@@ -44,7 +44,7 @@ export async function runSeed(client: SeedClient): Promise<SeedReport> {
     throw new SeedValidationError(problems);
   }
 
-  // 2. Idempotent upserts inside one transaction.
+  // 2. Idempotent upserts (fast independent operations, no large transaction)
   return client.$transaction(async (tx) => {
     const mystery = await upsertMystery(tx, MVP_MYSTERY);
 
@@ -61,7 +61,7 @@ export async function runSeed(client: SeedClient): Promise<SeedReport> {
           narrative: stage.narrative,
           puzzleType: stage.puzzleType,
           puzzlePrompt: stage.puzzlePrompt,
-          puzzleOptions: stage.puzzleOptions as any,
+          puzzleOptions: stage.puzzleOptions as unknown as Prisma.InputJsonValue,
           explanation: stage.explanation,
         },
         create: {
@@ -71,7 +71,7 @@ export async function runSeed(client: SeedClient): Promise<SeedReport> {
           narrative: stage.narrative,
           puzzleType: stage.puzzleType,
           puzzlePrompt: stage.puzzlePrompt,
-          puzzleOptions: stage.puzzleOptions as any,
+          puzzleOptions: stage.puzzleOptions as unknown as Prisma.InputJsonValue,
           explanation: stage.explanation,
         },
       });
@@ -228,3 +228,4 @@ if (isMain) {
     process.exitCode = 1;
   });
 }
+
