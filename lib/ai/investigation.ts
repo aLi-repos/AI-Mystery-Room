@@ -103,6 +103,18 @@ function evidenceManifest(evidence: EvidenceInput[]): string {
   return `EVIDENCE FILES:\n${lines.join("\n")}`;
 }
 
+/**
+ * Inlines the actual text contents of text evidence. Without this the model
+ * only sees filenames in the manifest and must honestly report the contents
+ * as "not provided".
+ */
+function textEvidenceBlocks(evidence: EvidenceInput[]): string {
+  const blocks = evidence
+    .filter((e) => e.text !== null && e.note === null)
+    .map((e) => `--- ${e.ref} (${e.filename}) CONTENTS ---\n${e.text}`);
+  return blocks.length ? `\n\nEVIDENCE CONTENTS (text files):\n${blocks.join("\n\n")}` : "";
+}
+
 function groundingRules(): string {
   return [
     "RULES (must obey):",
@@ -169,6 +181,7 @@ export async function analyzeCase(args: {
     `CASE DESCRIPTION:\n${caseDescription}`,
     "",
     evidenceManifest(evidence),
+    textEvidenceBlocks(evidence),
     "",
     requirements?.length
       ? `INVESTIGATOR REQUIREMENTS:\n${requirements.map((r) => `- ${r}`).join("\n")}`
@@ -238,6 +251,7 @@ export async function answerQuestion(args: {
     `CASE DESCRIPTION:\n${caseDescription}`,
     "",
     evidenceManifest(evidence),
+    textEvidenceBlocks(evidence),
     "",
     `CURRENT FINDINGS:\n${findingsDigest}`,
     "",
@@ -296,6 +310,7 @@ export async function generateReport(args: {
     `CASE DESCRIPTION:\n${caseDescription}`,
     "",
     evidenceManifest(evidence),
+    textEvidenceBlocks(evidence),
     "",
     `FINDINGS:\n${findingsDigest}`,
     "",
