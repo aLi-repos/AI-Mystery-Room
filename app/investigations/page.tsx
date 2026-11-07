@@ -99,9 +99,12 @@ export default function InvestigationsPage() {
         {error ? (
           <p className="alert-danger p-4 text-sm">{error}</p>
         ) : items === null ? (
-          <div className="panel relative h-24 overflow-hidden p-4">
-            <div className="progress-indeterminate absolute inset-x-4 top-1/2 h-1.5 overflow-hidden rounded-full bg-border" />
-            <p className="mt-8 text-sm text-muted">Loading case archive…</p>
+          <div className="panel flex items-center gap-5 p-6">
+            <span className="fp-scan shrink-0" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-sm text-text">Opening case archive…</p>
+              <div className="progress-indeterminate relative mt-3 h-1.5 overflow-hidden rounded-full bg-border" />
+            </div>
           </div>
         ) : items.length === 0 ? (
           <div className="panel p-8 text-center">

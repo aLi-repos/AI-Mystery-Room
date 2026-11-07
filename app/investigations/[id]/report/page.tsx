@@ -96,9 +96,12 @@ export default function ReportPage() {
   if (!data) {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
-        <div className="panel relative h-24 overflow-hidden p-4">
-          <div className="progress-indeterminate absolute inset-x-4 top-7 h-1.5 overflow-hidden rounded-full bg-border" />
-          <p className="mt-10 text-sm text-muted">Loading report…</p>
+        <div className="panel flex items-center gap-5 p-6">
+          <span className="fp-scan shrink-0" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-sm text-text">Retrieving report…</p>
+            <div className="progress-indeterminate relative mt-3 h-1.5 overflow-hidden rounded-full bg-border" />
+          </div>
         </div>
       </main>
     );

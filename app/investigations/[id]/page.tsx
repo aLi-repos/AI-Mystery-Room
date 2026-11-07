@@ -396,9 +396,12 @@ export default function InvestigationWorkspacePage() {
   if (!caseData) {
     return (
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
-        <div className="panel relative h-28 overflow-hidden p-4">
-          <div className="progress-indeterminate absolute inset-x-4 top-8 h-1.5 overflow-hidden rounded-full bg-border" />
-          <p className="mt-12 text-sm text-muted">Loading case file…</p>
+        <div className="panel flex items-center gap-5 p-6">
+          <span className="fp-scan shrink-0" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-sm text-text">Scanning case file…</p>
+            <div className="progress-indeterminate relative mt-3 h-1.5 overflow-hidden rounded-full bg-border" />
+          </div>
         </div>
       </main>
     );
@@ -694,7 +697,24 @@ export default function InvestigationWorkspacePage() {
               <h3 className="font-display text-base text-text">
                 Evidence connections
               </h3>
-              <ul className="mt-3 space-y-2.5">
+              <svg
+                className="mt-2 h-4 w-full"
+                viewBox="0 0 300 16"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  className="connection-line"
+                  d="M4 8 H100 L140 4 H210 L250 8 H296"
+                  fill="none"
+                  stroke="var(--emerald)"
+                  strokeOpacity="0.55"
+                  strokeWidth="1.5"
+                />
+                <circle cx="4" cy="8" r="3" fill="var(--evidence)" />
+                <circle cx="296" cy="8" r="3" fill="var(--evidence)" />
+              </svg>
+              <ul className="mt-2 space-y-2.5">
                 {connections.map((f) => (
                   <FindingCard
                     key={f.id}

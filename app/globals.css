@@ -1,30 +1,38 @@
 @import "tailwindcss";
 
 /**
- * MysteryAI design system — "investigator's workspace".
+ * MysteryAI design system — "electric-green forensic workspace".
  *
- * Direction: white / light-grey checkerboard workspace, faint mathematical
- * and investigative symbols, teal/cyan accents, dark-navy typography,
- * yellow evidence markers, restrained red alerts, glass panels.
- * Implemented entirely with lightweight CSS/SVG — no image assets.
+ * Reference concept: white/light-grey checkerboard, clearly visible forensic
+ * symbols (fingerprints, CCTV, DNA, coordinates, probability formulas,
+ * evidence markers), dark-navy typography, electric-green (#39FF14) highlights
+ * with restrained neon glow, emerald (#00C853) / deep green (#008F5A)
+ * surfaces, yellow evidence tags, green scanning indicators, subtle red
+ * alerts, glass cards. Pure CSS/SVG — no image assets, no new dependencies.
+ *
+ * Contrast: --accent is the deep emerald used for text/buttons (white text
+ * and links pass WCAG AA); --neon/--emerald are decorative highlights.
  */
 :root {
-  --bg: #f7fafb; /* page base under the checkerboard */
-  --tile: #edf2f4; /* checker tile (very light grey) */
-  --surface: rgba(255, 255, 255, 0.78); /* glass panel fill */
-  --border: #d7e1e6;
-  --border-strong: #b9c9d1;
+  --bg: #f7fafb;
+  --tile: #e9eff1;
+  --surface: rgba(255, 255, 255, 0.78);
+  --border: #d5e2da;
+  --border-strong: #b6cdc0;
   --text: #0d2b3e; /* dark navy */
-  --muted: #55717f;
-  --accent: #0b7f7a; /* teal — white text passes contrast */
-  --accent-soft: rgba(11, 127, 122, 0.1);
-  --ai: #0891a0; /* cyan for AI surfaces */
-  --ai-soft: rgba(8, 145, 160, 0.1);
+  --muted: #4f6f63;
+  --accent: #00804f; /* deep emerald — accessible for text + buttons */
+  --accent-soft: rgba(0, 198, 83, 0.1);
+  --neon: #39ff14; /* electric green — glow, scans, decorative */
+  --emerald: #00c853;
+  --deep: #008f5a;
+  --ai: #00915a; /* AI surfaces, green */
+  --ai-soft: rgba(0, 162, 99, 0.1);
   --danger: #cf3b45;
   --danger-soft: rgba(207, 59, 69, 0.09);
-  --success: #2c9a5b;
+  --success: #00804f;
   --evidence: #f2c200; /* yellow evidence marker */
-  --evidence-soft: rgba(242, 194, 0, 0.14);
+  --evidence-soft: rgba(242, 194, 0, 0.15);
 }
 
 @theme inline {
@@ -36,6 +44,8 @@
   --color-muted: var(--muted);
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  --color-neon: var(--neon);
+  --color-emerald: var(--emerald);
   --color-ai: var(--ai);
   --color-ai-soft: var(--ai-soft);
   --color-danger: var(--danger);
@@ -69,20 +79,21 @@ body {
   line-height: 1.6;
 }
 
-/* Faint equation/question-mark tile pattern behind everything (SVG data
- * URI — one 320px tile, negligible cost, repeats across the viewport). */
+/* Forensic symbol tile — fingerprints, CCTV, DNA, question marks,
+ * coordinates, probability formulas, evidence markers. One 340px SVG tile
+ * repeating across the viewport (lightweight, clearly visible). */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.5;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='320' viewBox='0 0 320 320'%3E%3Cg fill='none' stroke='%239fb4bd' stroke-opacity='0.55' stroke-width='1.2' font-family='Georgia, serif'%3E%3Ctext x='18' y='46' font-size='22' fill='%230b7f7a' stroke='none' fill-opacity='0.5'%3EP(A%7CB)%3C/text%3E%3Ctext x='196' y='34' font-size='26' fill='%2355717f' stroke='none' fill-opacity='0.45'%3E%3F%3C/text%3E%3Ctext x='120' y='96' font-size='18' fill='%2355717f' stroke='none' fill-opacity='0.4'%3E%E2%88%91x%C2%B2%3Dnp%3C/text%3E%3Ccircle cx='264' cy='96' r='14'/%3E%3Cline x1='254' y1='96' x2='274' y2='96'/%3E%3Cline x1='264' y1='86' x2='264' y2='106'/%3E%3Ctext x='34' y='168' font-size='16' fill='%2355717f' stroke='none' fill-opacity='0.4'%3E48.8566%C2%B0N%3C/text%3E%3Ctext x='210' y='176' font-size='20' fill='%230b7f7a' stroke='none' fill-opacity='0.45'%3E%E2%88%86t%3C/text%3E%3Ctext x='104' y='230' font-size='24' fill='%2355717f' stroke='none' fill-opacity='0.35'%3E%E2%88%ABf(x)dx%3C/text%3E%3Ctext x='252' y='244' font-size='22' fill='%2355717f' stroke='none' fill-opacity='0.4'%3E%3F%3C/text%3E%3Ctext x='20' y='296' font-size='18' fill='%230b7f7a' stroke='none' fill-opacity='0.4'%3E%E2%88%80x%E2%88%A0x%E2%88%A0%3E0%3C/text%3E%3Ctext x='176' y='302' font-size='15' fill='%2355717f' stroke='none' fill-opacity='0.4'%3E01%3A42%3A16%3C/text%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.85;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='340' height='340' viewBox='0 0 340 340'%3E%3Cg font-family='Georgia, serif'%3E%3Cg fill='none' stroke='%23008F5A' stroke-opacity='0.6' stroke-width='1.4'%3E%3Cpath d='M24 62a20 20 0 0 1 40 0M30 66a14 14 0 0 1 28 0M36 70a8 8 0 0 1 16 0'/%3E%3Cpath d='M30 74c2 6 6 10 10 12'/%3E%3C/g%3E%3Cg fill='none' stroke='%234f6f63' stroke-opacity='0.6' stroke-width='1.6' stroke-linejoin='round'%3E%3Cpath d='M258 26h30l14 12v14h-44z'/%3E%3Cpath d='M274 52v8M266 62h24'/%3E%3Ccircle cx='296' cy='36' r='3' fill='%2300C853' fill-opacity='0.7' stroke='none'/%3E%3C/g%3E%3Ccircle cx='304' cy='24' r='5' fill='%2339FF14' fill-opacity='0.55'/%3E%3Cg fill='none' stroke='%23008F5A' stroke-opacity='0.55' stroke-width='1.4'%3E%3Cpath d='M28 196c14 10 14 28 0 38s-14 28 0 38'/%3E%3Cpath d='M52 196c-14 10-14 28 0 38s14 28 0 38'/%3E%3Cpath d='M31 206h18M29 220h22M29 234h22M31 248h18'/%3E%3C/g%3E%3Ctext x='96' y='44' font-size='26' fill='%2300C853' fill-opacity='0.75'%3E%3F%3C/text%3E%3Ctext x='188' y='150' font-size='30' fill='%23008F5A' fill-opacity='0.65'%3E%3F%3C/text%3E%3Ctext x='96' y='96' font-size='15' fill='%23008F5A' fill-opacity='0.8'%3EP(A%7CB)%3D%5BP(B%7CA)P(A)%5D%2FP(B)%3C/text%3E%3Ctext x='24' y='134' font-size='14' fill='%234f6f63' fill-opacity='0.75'%3E%CE%A3(x%E2%82%9Cx%CC%84)%C2%B2%3Dnp(1-p)%3C/text%3E%3Ctext x='112' y='274' font-size='13' fill='%23008F5A' fill-opacity='0.75'%3E40.7128%C2%B0N%2074.0060%C2%B0W%3C/text%3E%3Ctext x='214' y='240' font-size='13' fill='%234f6f63' fill-opacity='0.7'%3E01%3A42%3A16%3C/text%3E%3Ctext x='262' y='178' font-size='17' fill='%23008F5A' fill-opacity='0.7'%3E%E2%88%86t%3C/text%3E%3Ctext x='98' y='322' font-size='14' fill='%234f6f63' fill-opacity='0.7'%3E%E2%88%ABf(x)dx%3C/text%3E%3Cg%3E%3Crect x='240' y='84' width='30' height='18' rx='4' fill='%23F2C200' fill-opacity='0.55'/%3E%3Ccircle cx='246' cy='93' r='2.4' fill='white' fill-opacity='0.9'/%3E%3Ctext x='252' y='97' font-size='10' fill='%236b5300' fill-opacity='0.9' font-family='monospace'%3EEV%3C/text%3E%3C/g%3E%3Cg fill='none' stroke='%234f6f63' stroke-opacity='0.55' stroke-width='1.3'%3E%3Ccircle cx='306' cy='302' r='12'/%3E%3Cpath d='M298 302h16M306 294v16'/%3E%3C/g%3E%3Cpath d='M150 176l8 14h-16z' fill='%23cf3b45' fill-opacity='0.35'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 /* ---------------------------------------------------------------------
- * Glass panels — surfaces become frosted over the workspace pattern.
+ * Glass panels — frosted surfaces over the workspace pattern.
  * ------------------------------------------------------------------- */
 .bg-surface {
   backdrop-filter: blur(10px) saturate(1.15);
@@ -92,46 +103,81 @@ body::before {
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border-radius: 0.85rem;
   box-shadow:
     0 1px 2px rgba(13, 43, 62, 0.05),
-    0 10px 30px -18px rgba(13, 43, 62, 0.35);
+    0 12px 34px -20px rgba(0, 128, 79, 0.35);
   backdrop-filter: blur(10px) saturate(1.15);
   -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
 }
 
-/* Yellow evidence marker chip (EV refs). */
+.panel:hover {
+  border-color: var(--border-strong);
+}
+
+/* Primary controls: rounded, green, restrained neon glow on hover. */
+button,
+[role="button"] {
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.25s ease,
+    transform 0.15s ease,
+    filter 0.2s ease,
+    border-color 0.2s ease;
+}
+
+button.bg-accent:hover:not(:disabled),
+a.bg-accent:hover,
+button.bg-accent:focus-visible,
+a.bg-accent:focus-visible {
+  box-shadow:
+    0 0 0 1px rgba(57, 255, 20, 0.35),
+    0 0 16px rgba(57, 255, 20, 0.45);
+}
+
+/* Yellow evidence identification tag. */
 .evidence-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
   background: var(--evidence-soft);
-  border: 1px solid rgba(242, 194, 0, 0.55);
-  color: #7a5f00;
+  border: 1px solid rgba(242, 194, 0, 0.6);
+  color: #6b5300;
   border-radius: 999px;
   padding: 0.05rem 0.55rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.75rem;
   font-weight: 600;
+  box-shadow: 0 0 0 0 rgba(242, 194, 0, 0);
+  transition: box-shadow 0.25s ease;
 }
 
-/* Restrained red alert strip. */
+.evidence-chip:hover {
+  box-shadow: 0 0 10px -2px rgba(242, 194, 0, 0.8);
+}
+
+/* Restrained red alert / green info strips. */
 .alert-danger {
   background: var(--danger-soft);
   border: 1px solid rgba(207, 59, 69, 0.4);
-  border-radius: 0.6rem;
+  border-radius: 0.65rem;
   color: #a72b33;
 }
 
 .alert-info {
   background: var(--ai-soft);
-  border: 1px solid rgba(8, 145, 160, 0.35);
-  border-radius: 0.6rem;
-  color: #0a6f7a;
+  border: 1px solid rgba(0, 162, 99, 0.35);
+  border-radius: 0.65rem;
+  color: #006b45;
 }
 
 /* ---------------------------------------------------------------------
- * Micro-animations (all disabled by the reduced-motion block below).
+ * Animations — fingerprint scanning, glowing equations, floating symbols,
+ * moving connection lines, scanning indicators. All disabled by the
+ * reduced-motion block at the bottom.
  * ------------------------------------------------------------------- */
 @keyframes rise {
   from {
@@ -161,6 +207,58 @@ body::before {
   animation: fade 0.6s ease both;
 }
 
+/* Slow float for backdrop symbols. */
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--rot, 0deg));
+  }
+  50% {
+    transform: translateY(-12px) rotate(var(--rot, 0deg));
+  }
+}
+
+.float-slow {
+  animation: floaty 9s ease-in-out infinite;
+}
+
+.float-slower {
+  animation: floaty 14s ease-in-out infinite;
+  animation-delay: -4s;
+}
+
+/* Slow neon glow for equations. */
+@keyframes eq-glow {
+  0%,
+  100% {
+    text-shadow: 0 0 4px rgba(57, 255, 20, 0.15);
+    opacity: 0.35;
+  }
+  50% {
+    text-shadow:
+      0 0 10px rgba(57, 255, 20, 0.75),
+      0 0 22px rgba(0, 198, 83, 0.4);
+    opacity: 0.75;
+  }
+}
+
+.glow-eq {
+  animation: eq-glow 6s ease-in-out infinite;
+}
+
+/* Moving evidence connection line (animated stroke). */
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -60;
+  }
+}
+
+.connection-line {
+  stroke-dasharray: 8 6;
+  animation: dash-flow 2.4s linear infinite;
+}
+
+/* Indeterminate scan progress bar. */
 @keyframes indeterminate {
   0% {
     transform: translateX(-100%);
@@ -177,7 +275,8 @@ body::before {
   left: 0;
   width: 30%;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), var(--ai));
+  background: linear-gradient(90deg, var(--emerald), var(--neon));
+  box-shadow: 0 0 10px rgba(57, 255, 20, 0.6);
   animation: indeterminate 1.4s ease-in-out infinite;
 }
 
@@ -202,15 +301,58 @@ body::before {
   animation: ping-soft 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
+/* Fingerprint scanning effect: whorl print + sweeping neon scan line. */
+@keyframes fp-sweep {
+  0% {
+    top: 6%;
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    top: 92%;
+    opacity: 0;
+  }
+}
+
+.fp-scan {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--border);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64' fill='none' stroke='%23008F5A' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M12 40a20 20 0 0 1 40 0M17 44a15 15 0 0 1 30 0M22 48a10 10 0 0 1 20 0M27 51a5 5 0 0 1 10 0'/%3E%3Cpath d='M27 40a5 5 0 0 1 10 0c0 6-1 10-3 13'/%3E%3Cpath d='M12 40c0 9 3 15 7 19M52 40c0 9-3 15-7 19'/%3E%3C/svg%3E");
+  background-size: 56px 56px;
+  background-position: center;
+  background-repeat: no-repeat;
+  box-shadow: inset 0 0 14px -6px rgba(0, 143, 90, 0.5);
+}
+
+.fp-scan::after {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--neon), transparent);
+  box-shadow: 0 0 10px 1px rgba(57, 255, 20, 0.8);
+  animation: fp-sweep 2.2s ease-in-out infinite;
+}
+
 /* ---------------------------------------------------------------------
  * Accessibility.
  * ------------------------------------------------------------------- */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--emerald);
   outline-offset: 2px;
 }
 
-/* Narrative text: readable measure. */
 .prose-narrative {
   max-width: 70ch;
 }
@@ -220,6 +362,7 @@ body::before {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }
