@@ -57,6 +57,22 @@ function geminiAvailable(): string | null {
   return key;
 }
 
+/**
+ * A 429 whose body names a *PerDay* quota (e.g.
+ * GenerateRequestsPerDayPerProjectPerModel-FreeTier) cannot recover until
+ * midnight Pacific — retrying only wastes ~12s before the same honest 503.
+ * Transient per-minute limits and 5xx keep the normal backoff.
+ */
+async function isDailyQuotaExhausted(res: Response): Promise<boolean> {
+  if (res.status !== 429) return false;
+  try {
+    const body = await res.clone().text();
+    return /PerDay/i.test(body);
+  } catch {
+    return false;
+  }
+}
+
 async function callGemini(
   parts: Record<string, unknown>[],
   schema: Record<string, unknown>,
@@ -67,7 +83,7 @@ async function callGemini(
   try {
     const base =
       process.env.AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
-    const model = process.env.AI_MODEL || "gemini-3.6-flash";
+    const model = process.env.AI_MODEL || "gemini-3.5-flash-lite";
     const url = `${base}/models/${model}:generateContent?key=${key}`;
     const init: RequestInit = {
       method: "POST",
@@ -89,6 +105,7 @@ async function callGemini(
     // (bad request/key/config) and never fabricate a result.
     const retryable = (r: Response) => r.status === 429 || r.status >= 500;
     for (let attempt = 0; !res.ok && retryable(res) && attempt < 2; attempt++) {
+      if (await isDailyQuotaExhausted(res)) break; // daily cap — retrying can't help today
       const retryAfter = Number(res.headers.get("retry-after"));
       const delayMs =
         retryAfter > 0 ? Math.min(retryAfter * 1000, 10_000) : 4000 * (attempt + 1);
@@ -366,7 +383,7 @@ export async function generateReport(args: {
   const key = geminiAvailable();
   if (!key) return null;
   try {
-    const url = `${base}/models/${process.env.AI_MODEL || "gemini-3.6-flash"}:generateContent?key=${key}`;
+    const url = `${base}/models/${process.env.AI_MODEL || "gemini-3.5-flash-lite"}:generateContent?key=${key}`;
     const init: RequestInit = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -380,6 +397,7 @@ export async function generateReport(args: {
     // 429/5xx only, max 2 retries, never fabricate a report.
     const retryable = (r: Response) => r.status === 429 || r.status >= 500;
     for (let attempt = 0; !res.ok && retryable(res) && attempt < 2; attempt++) {
+      if (await isDailyQuotaExhausted(res)) break; // daily cap — retrying can't help today
       const retryAfter = Number(res.headers.get("retry-after"));
       const delayMs =
         retryAfter > 0 ? Math.min(retryAfter * 1000, 10_000) : 4000 * (attempt + 1);

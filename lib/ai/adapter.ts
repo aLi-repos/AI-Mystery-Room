@@ -29,7 +29,7 @@ export async function generateHint(req: HintRequest): Promise<HintOutput | null>
   }
   try {
     const prompt = `You are a mystery-game assistant. Provide a progressive hint for level ${req.level}. Never reveal the answer. Stage: ${req.stageTitle}. Narrative: ${req.narrative}. Clues: ${req.clues.join(" | ")}. Puzzle: ${req.puzzlePrompt}. Previous hints: ${req.previousHints.join(" | ") || "none"}. Keep level ${req.level} concise.`;
-    const res = await fetch(`${process.env.AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta"}/models/${process.env.AI_MODEL || "gemini-3.5-flash"}:generateContent?key=${key}`, {
+    const res = await fetch(`${process.env.AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta"}/models/${process.env.AI_MODEL || "gemini-3.5-flash-lite"}:generateContent?key=${key}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", responseSchema: { type: "object", properties: { level: { type: "integer" }, content: { type: "string" }, reasoning: { type: "string" } }, required: ["content"] } } }),
