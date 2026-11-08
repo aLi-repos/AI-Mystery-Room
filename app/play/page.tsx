@@ -2,51 +2,54 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 
+/** Case picker — one button per mystery, no difficulty selection. */
 export default function PlayPage() {
   const [mysteries, setMysteries] = useState<
-    { id: string; title?: string; tagline?: string; stageCount?: number }[]
+    { id: string; title?: string; tagline?: string }[]
   >([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/mysteries", { credentials: "include" })
-      .then(r => r.json())
-      .then(data => setMysteries(data.items || []))
+      .then((r) => r.json())
+      .then((data) => setMysteries(data.items || []))
       .catch(() => setMysteries([]))
       .finally(() => setLoading(false));
   }, []);
 
   return (
-    <main className="min-h-screen px-6 py-12 bg-bg text-text max-w-4xl mx-auto">
-      <h1 className="font-display text-4xl">Select a Mystery</h1>
-      <p className="mt-2 text-muted">One predefined case. Three difficulty profiles.</p>
+    <main className="mx-auto max-w-4xl px-6 py-12">
+      <h1 className="font-display text-4xl text-text">Select a Case</h1>
+      <p className="mt-2 text-muted">One predefined case file.</p>
       <div className="mt-8 grid gap-6">
         {loading ? (
-          <div className="text-muted">Loading...</div>
+          <div className="panel p-5 text-muted">Loading…</div>
         ) : mysteries.length === 0 ? (
-          <div className="text-muted">No mysteries published. (DB seed required)</div>
+          <div className="panel p-5 text-muted">
+            No cases published yet.
+          </div>
         ) : (
           mysteries.map((m) => (
-            <div key={m.id} className="border border-border rounded-xl p-6 bg-surface hover:border-accent transition">
-              <h2 className="font-display text-2xl">{m.title}</h2>
-              <p className="text-muted mt-1">{m.tagline}</p>
-              <div className="mt-4 flex gap-3">
-                {["easy", "medium", "hard"].map((d: string) => (
-                  <Link
-                    key={d}
-                    href={`/game?mysteryId=${m.id}&difficulty=${d}`}
-                    className="px-4 py-2 rounded-md bg-bg border border-border hover:border-accent text-sm capitalize font-semibold"
-                  >
-                    {d}
-                  </Link>
-                ))}
-              </div>
+            <div
+              key={m.id}
+              className="panel p-6 transition hover:border-accent"
+            >
+              <h2 className="font-display text-2xl text-text">{m.title}</h2>
+              <p className="mt-1 text-muted">{m.tagline}</p>
+              <Link
+                href={`/game?mysteryId=${m.id}`}
+                className="mt-4 inline-block rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
+              >
+                Open case →
+              </Link>
             </div>
           ))
         )}
       </div>
       <div className="mt-8">
-        <Link href="/" className="text-muted hover:text-text">← Back</Link>
+        <Link href="/dashboard" className="text-muted hover:text-text">
+          ← Dashboard
+        </Link>
       </div>
     </main>
   );

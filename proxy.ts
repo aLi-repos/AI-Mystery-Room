@@ -6,9 +6,8 @@ import { sessionCookieName } from "@/lib/auth/cookies";
 /**
  * Route protection (spec.md §14 P2 — "session middleware + route protection").
  *
- * Next 16 renamed `middleware.ts` to `proxy.ts` (verified in
- * node_modules/next/dist/docs — `middleware.js` is deprecated in favour of
- * `proxy.js`; same functionality). This file is the single proxy entry point.
+ * Next 16 renamed `middleware.ts` to `proxy.ts`; this is the single proxy
+ * entry point.
  *
  * Policy:
  *  - app routes that require a verified session redirect to `/login`,
@@ -16,7 +15,15 @@ import { sessionCookieName } from "@/lib/auth/cookies";
  *  - `/api/*` is NOT proxied — every API route authenticates itself
  *    (defence in depth: a proxy bypass cannot grant API access).
  */
-const PROTECTED_PREFIXES = ["/dashboard", "/mysteries", "/play", "/results", "/history", "/investigations"];
+const PROTECTED_PREFIXES = [
+  "/dashboard",
+  "/mysteries",
+  "/play",
+  "/game",
+  "/results",
+  "/history",
+  "/investigations",
+];
 const AUTH_PAGES = ["/login", "/register"];
 
 export async function proxy(request: NextRequest) {
@@ -50,7 +57,9 @@ export async function proxy(request: NextRequest) {
 
   if (needsSession && !hasSession) {
     const url = new URL("/login", request.url);
-    url.searchParams.set("next", pathname);
+    // Preserve the full target (path + query) so e.g. /game?mysteryId=…
+    // survives the login round-trip.
+    url.searchParams.set("next", `${pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(url);
   }
 
@@ -66,6 +75,7 @@ export const config = {
     "/dashboard/:path*",
     "/mysteries/:path*",
     "/play/:path*",
+    "/game/:path*",
     "/results/:path*",
     "/history/:path*",
     "/investigations/:path*",

@@ -245,6 +245,11 @@ export default function InvestigationWorkspacePage() {
   const [generating, setGenerating] = useState(false);
   const [reportMsg, setReportMsg] = useState<string | null>(null);
 
+  // Story analysis → evidence recommendations
+  const [recBusy, setRecBusy] = useState(false);
+  const [recs, setRecs] = useState<{ type: string; reason: string }[]>([]);
+  const [recMsg, setRecMsg] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/investigations/${id}`, { cache: "no-store" });
@@ -341,6 +346,28 @@ export default function InvestigationWorkspacePage() {
     }
     setAnalyzing(false);
     await load();
+  }
+
+  async function runRecommend() {
+    setRecBusy(true);
+    setRecMsg(null);
+    try {
+      const res = await fetch(`/api/investigations/${id}/recommend`, {
+        method: "POST",
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setRecMsg(body?.error?.message ?? "Story analysis failed");
+        setRecs([]);
+      } else {
+        const list = Array.isArray(body.recommendations) ? body.recommendations : [];
+        setRecs(list);
+        if (list.length === 0) setRecMsg(body.summary || "No specific evidence recommended.");
+      }
+    } catch {
+      setRecMsg("Story analysis failed");
+    }
+    setRecBusy(false);
   }
 
   async function askQuestion(q: string) {
@@ -497,6 +524,38 @@ export default function InvestigationWorkspacePage() {
               will be listed as present but <strong>not analysed</strong> — this
               deployment cannot process their contents.
             </p>
+          ) : null}
+        </div>
+
+        {/* AI story analysis → evidence recommendations */}
+        <div className="mt-4 rounded-lg border border-border bg-white/60 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-xl text-sm text-muted">
+              Let the AI read your case story and recommend which evidence to
+              collect — and why each type is relevant.
+            </p>
+            <button
+              type="button"
+              onClick={runRecommend}
+              disabled={recBusy}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
+            >
+              {recBusy ? "Analysing story…" : "Analyse story → recommend evidence"}
+            </button>
+          </div>
+          {recMsg ? <p className="mt-2 text-xs text-muted">{recMsg}</p> : null}
+          {recs.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {recs.map((r, i) => (
+                <li
+                  key={i}
+                  className="rounded border border-border bg-white/75 p-3 text-sm"
+                >
+                  <span className="evidence-chip">{r.type}</span>
+                  <span className="ml-2 text-text">{r.reason}</span>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </div>
 

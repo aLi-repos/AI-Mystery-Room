@@ -13,7 +13,8 @@ import { apiErrorMessage, postJson } from "@/lib/client/api";
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/dashboard";
+  const rawNext = searchParams.get("next") ?? "/dashboard";
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard";
 
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");

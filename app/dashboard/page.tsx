@@ -167,10 +167,6 @@ export default async function DashboardPage() {
                 <dt className="inline">Est. time: </dt>
                 <dd className="inline text-text">{library.estimatedMinutes} min</dd>
               </div>
-              <div>
-                <dt className="inline">Difficulty: </dt>
-                <dd className="inline text-text">Easy · Medium · Hard</dd>
-              </div>
             </dl>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link

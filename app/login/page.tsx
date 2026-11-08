@@ -14,7 +14,8 @@ import { apiErrorMessage, postJson } from "@/lib/client/api";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/dashboard";
+  const rawNext = searchParams.get("next") ?? "/dashboard";
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

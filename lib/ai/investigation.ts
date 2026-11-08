@@ -176,7 +176,7 @@ export async function analyzeCase(args: {
 }): Promise<AnalysisResult | null> {
   const { caseDescription, evidence, requirements } = args;
   const prompt = [
-    "You are a forensic investigation assistant. Analyse the case below.",
+    "You are a forensic investigation assistant. Analyse the case below like an investigator: first understand the story and identify the persons, events, locations and clues it describes.",
     "",
     `CASE DESCRIPTION:\n${caseDescription}`,
     "",
@@ -189,7 +189,7 @@ export async function analyzeCase(args: {
     "",
     groundingRules(),
     "",
-    "Return JSON matching the schema: summary (2-4 sentences), findings (the important observations, inconsistencies, links, timeline entries and hypotheses), missingEvidence (evidence that should be collected next).",
+    "Return JSON matching the schema: summary (2-4 sentences); findings (the identified persons, events, locations and clues, plus observations, inconsistencies, links, timeline entries and hypotheses); missingEvidence (evidence that should be collected next — for each item state the evidence type, e.g. CCTV footage, audio recording, photograph, PDF/text document, and why it is relevant to this case).",
   ]
     .filter(Boolean)
     .join("\n");
@@ -353,4 +353,57 @@ export async function generateReport(args: {
   } catch {
     return null;
   }
+}
+
+export type EvidenceRecommendation = { type: string; reason: string };
+export type RecommendationResult = {
+  summary: string;
+  recommendations: EvidenceRecommendation[];
+};
+
+/**
+ * Story analysis → recommended evidence (type + relevance). Runs on the
+ * case description alone, before any upload: it RECOMMENDS evidence and
+ * never claims any exists or was analysed.
+ */
+export async function recommendEvidence(
+  caseDescription: string,
+): Promise<RecommendationResult | null> {
+  const prompt = [
+    "You are a forensic investigator analysing a case story BEFORE any evidence has been collected.",
+    `CASE STORY:\n${caseDescription}`,
+    "",
+    "Identify the persons, events, locations and clues the story describes, then recommend the evidence that should be collected to investigate the case. Cover the supported types where relevant: CCTV/video footage, audio recordings, photographs/images, PDF/text documents and other supporting files.",
+    "For each recommendation give the evidence type and a short reason explaining why it is relevant to THIS case.",
+    "Never state that evidence exists or was analysed — only recommend what should be collected. If the story is too vague, say what detail is missing.",
+    "Return JSON: {summary: string (2-3 sentences on what the story describes), recommendations: [{type: string, reason: string}]}.",
+  ].join("\n");
+  const schema = {
+    type: "object",
+    properties: {
+      summary: { type: "string" },
+      recommendations: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { type: { type: "string" }, reason: { type: "string" } },
+          required: ["type", "reason"],
+        },
+      },
+    },
+    required: ["summary", "recommendations"],
+  };
+  const data = await callGemini([textPart(prompt)], schema, 2048);
+  if (!data) return null;
+  const summary = typeof data.summary === "string" ? data.summary : "";
+  const raw = Array.isArray(data.recommendations) ? data.recommendations : [];
+  const recommendations: EvidenceRecommendation[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) continue;
+    const r = item as Record<string, unknown>;
+    const type = typeof r.type === "string" ? r.type.trim() : "";
+    const reason = typeof r.reason === "string" ? r.reason.trim() : "";
+    if (type && reason) recommendations.push({ type, reason });
+  }
+  return { summary, recommendations };
 }
