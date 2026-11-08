@@ -84,10 +84,13 @@ async function callGemini(
       }),
     };
     let res = await fetch(url, init);
-    if (!res.ok) {
-      // One retry after a short pause — absorbs transient rate limits (429)
-      // and provider blips without ever fabricating a result.
-      await new Promise((r) => setTimeout(r, 2000));
+    // Backoff retries absorb transient rate limits (429) and provider
+    // blips — honour Retry-After when present, never fabricate a result.
+    for (let attempt = 0; !res.ok && attempt < 2; attempt++) {
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const delayMs =
+        retryAfter > 0 ? Math.min(retryAfter * 1000, 10_000) : 4000 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, delayMs));
       res = await fetch(url, init);
     }
     if (!res.ok) return null;
@@ -371,9 +374,12 @@ export async function generateReport(args: {
       }),
     };
     let res = await fetch(url, init);
-    if (!res.ok) {
-      // One retry — same transient-limit absorption as callGemini.
-      await new Promise((r) => setTimeout(r, 2000));
+    // One retry with backoff — same transient-limit absorption as callGemini.
+    for (let attempt = 0; !res.ok && attempt < 2; attempt++) {
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const delayMs =
+        retryAfter > 0 ? Math.min(retryAfter * 1000, 10_000) : 4000 * (attempt + 1);
+      await new Promise((r) => setTimeout(r, delayMs));
       res = await fetch(url, init);
     }
     if (!res.ok) return null;
