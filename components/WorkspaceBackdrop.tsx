@@ -98,7 +98,7 @@ function Glyph({ kind }: { kind: NonNullable<Piece["svg"]> }) {
 
 export default function WorkspaceBackdrop() {
   return (
-    <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden select-none">
+    <div aria-hidden="true" data-backdrop className="pointer-events-none fixed inset-0 -z-10 overflow-hidden select-none">
       {/* Moving evidence-connection line — dashed, flowing */}
       <svg
         className="absolute inset-0 h-full w-full"
