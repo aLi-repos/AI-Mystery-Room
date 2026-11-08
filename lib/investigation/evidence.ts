@@ -20,6 +20,51 @@ export const EVIDENCE_CATEGORIES = [
 ] as const;
 export type EvidenceCategory = (typeof EVIDENCE_CATEGORIES)[number];
 
+/**
+ * Step-B focus categories (what the user selects when creating a case).
+ * They map onto the technical kinds above — this deployment has NO
+ * fingerprint/DNA extraction capability, so those map to `other`
+ * (stored, explicitly NOT analysed).
+ */
+export const FOCUS_CATEGORIES = [
+  "cctv",
+  "audio",
+  "photograph",
+  "fingerprint",
+  "dna",
+  "phone_records",
+  "location",
+  "documents",
+] as const;
+export type FocusCategory = (typeof FOCUS_CATEGORIES)[number];
+
+const FOCUS_TECHNICAL: Record<FocusCategory, EvidenceCategory[]> = {
+  cctv: ["video"],
+  audio: ["audio"],
+  photograph: ["image"],
+  fingerprint: ["other"], // no fingerprint extraction capability
+  dna: ["other"], // no DNA analysis capability
+  phone_records: ["text", "pdf", "other"],
+  location: ["text", "pdf", "other"],
+  documents: ["text", "pdf", "other"],
+};
+
+/**
+ * Accepts BOTH technical kinds (legacy cases + tests) and focus categories;
+ * expands to the set of technical kinds allowed for upload.
+ */
+export function expandSelectedCategories(selected: string[]): EvidenceCategory[] {
+  const out = new Set<EvidenceCategory>();
+  for (const value of selected) {
+    if ((EVIDENCE_CATEGORIES as readonly string[]).includes(value)) {
+      out.add(value as EvidenceCategory);
+    } else if ((FOCUS_CATEGORIES as readonly string[]).includes(value)) {
+      for (const kind of FOCUS_TECHNICAL[value as FocusCategory]) out.add(kind);
+    }
+  }
+  return [...out];
+}
+
 /** Vercel serverless request-body limit is 4.5 MB — stay safely below. */
 export const MAX_FILE_BYTES = 4 * 1024 * 1024;
 /** Per-investigation file cap (keeps analysis payloads bounded). */
@@ -155,7 +200,8 @@ export function checkUpload(args: {
   filename: string;
   mimeType: string;
   sizeBytes: number;
-  selected: EvidenceCategory[];
+  /** Focus categories (cctv, fingerprint, …) and/or technical kinds. */
+  selected: string[];
   currentFileCount: number;
 }): UploadCheck {
   const { filename, mimeType, sizeBytes, selected, currentFileCount } = args;
@@ -183,10 +229,12 @@ export function checkUpload(args: {
 
   const plan = planProcessing(filename, mimeType, sizeBytes);
   // A known format outside the selected categories is rejected; unknown
-  // formats land in "other" which the user must have selected.
+  // formats land in "other" which the user must have selected. `selected`
+  // may contain focus categories (cctv, fingerprint, …) — expanded first.
   const known = inferCategory(filename, mimeType);
   const effective = known ?? "other";
-  if (!selected.includes(effective)) {
+  const allowed = new Set(expandSelectedCategories(selected));
+  if (!allowed.has(effective)) {
     return {
       ok: false,
       code: "CATEGORY_NOT_SELECTED",

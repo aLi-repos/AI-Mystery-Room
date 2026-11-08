@@ -82,8 +82,41 @@ describe("Prisma schema + migration (real CLI, offline)", () => {
       .join("\n;\n");
 
     const migrationStatements = new Set(statements(migrationSql));
+
+    // Later migrations may extend enums with ALTER TYPE ... ADD VALUE —
+    // fold those additions back into the CREATE TYPE statements before the
+    // subset comparison (additive enum changes are otherwise invisible here).
+    const statementList = [...migrationStatements];
+    const enumAdditions = new Map<string, string[]>();
+    for (const statement of statementList) {
+      const match = statement.match(
+        /^ALTER TYPE "([^"]+)" ADD VALUE (?:IF NOT EXISTS )?'([^']+)';?$/,
+      );
+      if (match) {
+        const list = enumAdditions.get(match[1]!) ?? [];
+        list.push(match[2]!);
+        enumAdditions.set(match[1]!, list);
+      }
+    }
+    function covered(statement: string): boolean {
+      if (migrationStatements.has(statement)) return true;
+      const match = statement.match(/^CREATE TYPE "([^"]+)" AS ENUM \((.*)\)$/);
+      if (!match) return false;
+      const additions = enumAdditions.get(match[1]!);
+      const values = match[2]!.split(",").map((value) => value.trim());
+      if (!additions?.length || values.length <= additions.length) return false;
+      const baseValues = values.slice(0, values.length - additions.length);
+      const addedValues = values
+        .slice(values.length - additions.length)
+        .map((value) => value.replace(/^'|'$/g, ""));
+      if (addedValues.join(",") !== additions.join(",")) return false;
+      return migrationStatements.has(
+        `CREATE TYPE "${match[1]}" AS ENUM (${baseValues.join(", ")})`,
+      );
+    }
+
     const missing = statements(generated).filter(
-      (statement) => !migrationStatements.has(statement),
+      (statement) => !covered(statement),
     );
 
     // Every statement Prisma generates from the schema must exist verbatim in

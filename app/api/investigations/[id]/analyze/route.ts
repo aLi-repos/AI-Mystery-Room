@@ -40,19 +40,20 @@ export async function POST(
     const db = getPrisma();
     const investigation = await db.investigation.findFirst({
       where: { id, userId: user.id },
-      select: { id: true, caseDescription: true },
+      select: { id: true, caseDescription: true, categories: true },
     });
     if (!investigation) return apiError(404, "NOT_FOUND", "Investigation not found");
 
+    // Files are OPTIONAL: analysis runs from the story + selected focus
+    // categories alone, developing leads and clearly-labelled SIMULATED
+    // evidence. Real uploads are still preferred and cited when present.
     const evidenceInputs = await loadEvidenceInputs(id);
-    if (evidenceInputs.length === 0) {
-      return apiError(400, "NO_EVIDENCE", "Upload evidence before running analysis.");
-    }
 
     const result = await analyzeCase({
       caseDescription: investigation.caseDescription,
       evidence: evidenceInputs,
       requirements: parsed.data.requirements,
+      categories: investigation.categories,
     });
     if (!result) {
       return apiError(

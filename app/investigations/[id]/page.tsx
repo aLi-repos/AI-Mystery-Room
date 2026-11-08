@@ -61,6 +61,10 @@ const KIND_LABELS: Record<string, string> = {
   timeline: "Timeline",
   missing_evidence: "Missing evidence",
   link: "Connection",
+  suspect: "Suspect",
+  lead: "AI lead",
+  simulated_evidence: "Simulated evidence",
+  alternative: "Alternative explanation",
 };
 
 const SUGGESTED_QUESTIONS = [
@@ -73,6 +77,22 @@ const SUGGESTED_QUESTIONS = [
 ];
 
 const MAX_FILE_MB = 4;
+
+const CATEGORY_LABELS: Record<string, string> = {
+  cctv: "CCTV footage",
+  audio: "Audio recordings",
+  photograph: "Photographs",
+  fingerprint: "Fingerprints",
+  dna: "DNA & forensic",
+  phone_records: "Phone & call records",
+  location: "Location & movement",
+  documents: "Documents & other",
+  video: "CCTV / video",
+  image: "Photos & images",
+  pdf: "PDF documents",
+  text: "Text documents",
+  other: "Other files",
+};
 
 function fmtSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -449,6 +469,10 @@ export default function InvestigationWorkspacePage() {
   const inconsistencies = byKind("inconsistency");
   const connections = byKind("link");
   const missing = byKind("missing_evidence");
+  const suspects = byKind("suspect");
+  const leads = byKind("lead");
+  const simulated = byKind("simulated_evidence");
+  const alternatives = byKind("alternative");
 
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">
@@ -486,7 +510,7 @@ export default function InvestigationWorkspacePage() {
                 key={c}
                 className="rounded-full border border-border bg-white/70 px-2.5 py-0.5 text-xs text-muted"
               >
-                {c}
+                {CATEGORY_LABELS[c] ?? c}
               </span>
             ))}
           </div>
@@ -610,16 +634,18 @@ export default function InvestigationWorkspacePage() {
         </SectionTitle>
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-xl text-sm text-muted">
-            The AI reviews the case description and every analysable file, then
-            returns findings that each cite their supporting evidence.
+            The AI investigates the case story and every analysable file —
+            developing leads, suspects, contradictions and a timeline. Files are
+            optional; without uploads it works from your story and generates
+            clearly-labelled <strong>SIMULATED</strong> material.
           </p>
           <button
             type="button"
             onClick={runAnalysis}
-            disabled={analyzing || caseData.evidence.length === 0}
+            disabled={analyzing}
             className="rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
           >
-            {analyzing ? "Analysing…" : "Run analysis"}
+            {analyzing ? "Investigating…" : "Run AI investigation"}
           </button>
         </div>
 
@@ -627,14 +653,17 @@ export default function InvestigationWorkspacePage() {
           <div className="alert-info mt-4 p-4" role="status">
             <div className="flex items-center gap-2 text-sm font-medium">
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-ai text-ai status-pulse" />
-              AI analysing {caseData.evidence.length} evidence file(s) —
-              building observations, timeline and connections…
+              AI investigating {caseData.evidence.length} uploaded file(s) —
+              building leads, suspects, timeline and contradictions…
             </div>
             <div className="progress-indeterminate relative mt-3 h-1.5 overflow-hidden rounded-full bg-white/70" />
           </div>
         ) : null}
         {caseData.evidence.length === 0 && !analyzing ? (
-          <p className="mt-3 text-sm text-muted">Upload evidence to enable analysis.</p>
+          <p className="mt-3 text-sm text-muted">
+            No files uploaded yet — analysis runs from your case story and the
+            selected evidence categories.
+          </p>
         ) : null}
         {analysisMsg && !analyzing ? (
           <p
@@ -670,6 +699,52 @@ export default function InvestigationWorkspacePage() {
                     finding={f}
                     evidenceByRef={evidenceByRef}
                     tone="fact"
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Suspect profiles */}
+          {suspects.length > 0 ? (
+            <div className="panel mt-3 p-5">
+              <h3 className="font-display text-base text-text">Suspect profiles</h3>
+              <p className="mb-3 text-xs text-muted">
+                Persons of interest identified from the case story and evidence —
+                role, opportunity, motive and suspicious behaviour.
+              </p>
+              <ul className="space-y-2.5">
+                {suspects.map((f) => (
+                  <FindingCard
+                    key={f.id}
+                    finding={f}
+                    evidenceByRef={evidenceByRef}
+                    tone="plain"
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* AI-generated SIMULATED evidence — clearly labelled */}
+          {simulated.length > 0 ? (
+            <div className="panel mt-3 border-l-4 border-l-[var(--evidence)] bg-[rgba(242,194,0,0.06)] p-5">
+              <h3 className="font-display text-base text-text">
+                Simulated material (AI-generated)
+              </h3>
+              <p className="mb-3 text-xs text-[#8a6d00]">
+                ⚠ These are AI-developed illustrations to guide the
+                investigation — they are NOT real evidence and were never
+                extracted from any file. Real uploads always appear above with
+                their EV reference.
+              </p>
+              <ul className="space-y-2.5">
+                {simulated.map((f) => (
+                  <FindingCard
+                    key={f.id}
+                    finding={f}
+                    evidenceByRef={evidenceByRef}
+                    tone="hypothesis"
                   />
                 ))}
               </ul>
@@ -786,6 +861,52 @@ export default function InvestigationWorkspacePage() {
             </div>
           ) : null}
 
+          {/* AI-generated investigative leads */}
+          {leads.length > 0 ? (
+            <div className="panel mt-3 p-5">
+              <h3 className="font-display text-base text-text">
+                Investigative leads
+              </h3>
+              <p className="mb-3 text-xs text-muted">
+                Next actions the AI investigator recommends — follow-ups to
+                pursue, not established facts.
+              </p>
+              <ul className="space-y-2.5">
+                {leads.map((f) => (
+                  <FindingCard
+                    key={f.id}
+                    finding={f}
+                    evidenceByRef={evidenceByRef}
+                    tone="plain"
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {/* Alternative explanations */}
+          {alternatives.length > 0 ? (
+            <div className="panel mt-3 p-5">
+              <h3 className="font-display text-base text-text">
+                Alternative explanations
+              </h3>
+              <p className="mb-3 text-xs text-muted">
+                Competing readings of the same evidence — considered and
+                weighed against the leading hypothesis.
+              </p>
+              <ul className="space-y-2.5">
+                {alternatives.map((f) => (
+                  <FindingCard
+                    key={f.id}
+                    finding={f}
+                    evidenceByRef={evidenceByRef}
+                    tone="hypothesis"
+                  />
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {/* Missing evidence alert */}
           {missing.length > 0 ? (
             <div className="panel mt-3 border-l-4 border-l-[var(--evidence)] bg-[rgba(242,194,0,0.06)] p-5">
@@ -877,7 +998,7 @@ export default function InvestigationWorkspacePage() {
 
       {/* Report */}
       <section className="panel mt-5 p-6">
-        <SectionTitle>Investigation report</SectionTitle>
+        <SectionTitle>Final verdict & report</SectionTitle>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
             type="button"
@@ -888,8 +1009,8 @@ export default function InvestigationWorkspacePage() {
             {generating
               ? "Generating…"
               : caseData.report
-                ? "Regenerate report"
-                : "Generate report"}
+                ? "Regenerate final verdict"
+                : "Generate final verdict & report"}
           </button>
           {caseData.report ? (
             <>

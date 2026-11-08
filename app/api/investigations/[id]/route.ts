@@ -11,15 +11,15 @@ import {
 } from "@/lib/api";
 import { getSessionUser } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/prisma";
-import { EVIDENCE_CATEGORIES } from "@/lib/investigation/evidence";
+import { EVIDENCE_CATEGORIES, FOCUS_CATEGORIES } from "@/lib/investigation/evidence";
 
 const patchSchema = z.object({
   title: z.string().trim().min(3).max(120).optional(),
   caseDescription: z.string().trim().min(10).max(50_000).optional(),
   categories: z
-    .array(z.enum(EVIDENCE_CATEGORIES))
+    .array(z.enum([...EVIDENCE_CATEGORIES, ...FOCUS_CATEGORIES]))
     .min(1)
-    .max(6)
+    .max(8)
     .refine((c) => new Set(c).size === c.length, "duplicates not allowed")
     .optional(),
 });

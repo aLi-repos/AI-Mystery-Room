@@ -7,34 +7,16 @@ import { apiErrorMessage, postJson } from "@/lib/client/api";
 
 /**
  * Create Investigation — case title, incident description, evidence
- * categories. Categories gate which uploads the server accepts; the hints
- * state honestly what will and will not be analysed.
+ * focus categories (Step B). Uploading files is OPTIONAL; hints state
+ * honestly what will and will not be analysed by this deployment.
  */
 
 const CATEGORY_OPTIONS: { value: string; label: string; hint: string; icon: string }[] = [
   {
-    value: "video",
-    label: "CCTV / video",
+    value: "cctv",
+    label: "CCTV footage",
     hint: "stored — frames are NOT analysed",
     icon: "M4 6h12v12H4zM16 10l4-2v8l-4-2",
-  },
-  {
-    value: "image",
-    label: "Photos & images",
-    hint: "analysed by AI",
-    icon: "M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4",
-  },
-  {
-    value: "pdf",
-    label: "PDF documents",
-    hint: "analysed by AI",
-    icon: "M6 3h9l4 4v14H6zM14 3v5h5",
-  },
-  {
-    value: "text",
-    label: "Text & case scripts",
-    hint: "analysed by AI",
-    icon: "M6 6h12M6 10h12M6 14h8M6 18h6",
   },
   {
     value: "audio",
@@ -43,10 +25,40 @@ const CATEGORY_OPTIONS: { value: string; label: string; hint: string; icon: stri
     icon: "M12 4v10M9 8v2a3 3 0 0 0 6 0V8M8 19h8",
   },
   {
-    value: "other",
-    label: "Other files",
-    hint: "stored — NOT analysed",
-    icon: "M4 7h16v10H4zM8 7V5h8v2",
+    value: "photograph",
+    label: "Photographs",
+    hint: "analysed by AI",
+    icon: "M4 5h16v14H4zM4 15l5-5 4 4 3-3 4 4",
+  },
+  {
+    value: "fingerprint",
+    label: "Fingerprints",
+    hint: "stored — no print extraction available",
+    icon: "M12 3a9 9 0 0 0-9 9M12 7a5 5 0 0 0-5 5M12 11a1 1 0 0 0-1 1M8 19c1-2 1-4 1-6",
+  },
+  {
+    value: "dna",
+    label: "DNA & forensic",
+    hint: "stored — no forensic analysis available",
+    icon: "M7 3c0 6 10 6 10 12M17 3c0 6-10 6-10 12M7 21h4M13 21h4",
+  },
+  {
+    value: "phone_records",
+    label: "Phone & call records",
+    hint: "text/PDF analysed by AI",
+    icon: "M7 3h10v18H7zM10 18h4",
+  },
+  {
+    value: "location",
+    label: "Location & movement",
+    hint: "text/PDF analysed by AI",
+    icon: "M12 21s-6-5.7-6-10a6 6 0 1 1 12 0c0 4.3-6 10-6 10zM12 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
+  },
+  {
+    value: "documents",
+    label: "Documents & other",
+    hint: "text/PDF analysed · other files stored",
+    icon: "M6 3h9l4 4v14H6zM14 3v5h5M9 12h6M9 16h6",
   },
 ];
 
@@ -54,7 +66,12 @@ export default function NewInvestigationPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [caseDescription, setCaseDescription] = useState("");
-  const [categories, setCategories] = useState<string[]>(["text", "image", "pdf"]);
+  const [categories, setCategories] = useState<string[]>([
+    "cctv",
+    "audio",
+    "photograph",
+    "documents",
+  ]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -100,8 +117,8 @@ export default function NewInvestigationPage() {
         </span>
         <h1 className="mt-3 font-display text-3xl text-text">New investigation</h1>
         <p className="mt-1 text-sm text-muted">
-          The AI analyses only what you provide here and in the next step — it
-          never invents evidence.
+          The AI investigates what you provide. Material it generates itself is
+          clearly labelled SIMULATED — never presented as real evidence.
         </p>
       </div>
 
@@ -150,8 +167,9 @@ export default function NewInvestigationPage() {
             Evidence types to investigate
           </legend>
           <p className="mb-3 text-xs text-muted">
-            Select every type you plan to upload — files outside these
-            categories are rejected at upload.
+            Select the evidence focus for this case. Uploading files is
+            optional — the AI develops the investigation from your story alone
+            if you have no files.
           </p>
           <div className="grid gap-2.5 sm:grid-cols-2">
             {CATEGORY_OPTIONS.map((opt) => {
@@ -217,7 +235,7 @@ export default function NewInvestigationPage() {
             disabled={busy}
             className="rounded-lg bg-accent px-6 py-3 font-semibold text-white shadow-sm transition hover:brightness-110 active:scale-[0.98] disabled:opacity-60"
           >
-            {busy ? "Creating case…" : "Create & upload evidence"}
+            {busy ? "Creating case…" : "Create investigation"}
           </button>
           <Link href="/investigations" className="text-sm text-muted hover:text-text">
             Cancel

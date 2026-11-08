@@ -141,6 +141,35 @@ describe("evidence validation (pure)", () => {
     ).toBe(false);
   });
 
+  it("accepts focus categories and maps them to technical kinds", () => {
+    // CCTV focus → video files allowed, text rejected
+    const cctv = { selected: ["cctv"], currentFileCount: 0 };
+    expect(
+      checkUpload({ ...cctv, filename: "cam1.mp4", mimeType: "video/mp4", sizeBytes: 100 }).ok,
+    ).toBe(true);
+    expect(
+      checkUpload({ ...cctv, filename: "a.txt", mimeType: "text/plain", sizeBytes: 100 }).ok,
+    ).toBe(false);
+    // Fingerprint/DNA have no extraction capability → stored as `other`
+    const fp = { selected: ["fingerprint", "dna"], currentFileCount: 0 };
+    expect(
+      checkUpload({ ...fp, filename: "print.dat", mimeType: "application/octet-stream", sizeBytes: 100 }).ok,
+    ).toBe(true);
+    expect(
+      checkUpload({ ...fp, filename: "a.txt", mimeType: "text/plain", sizeBytes: 100 }).ok,
+    ).toBe(false);
+    // Mixed legacy + focus selections
+    expect(
+      checkUpload({
+        selected: ["text", "documents"],
+        currentFileCount: 0,
+        filename: "a.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: 100,
+      }).ok,
+    ).toBe(true);
+  });
+
   it("clamps long text with an explicit truncation marker", () => {
     expect(clampText("short")).toBe("short");
     const long = clampText("x".repeat(MAX_TEXT_CHARS + 100));
@@ -350,19 +379,22 @@ describe("investigation API (MOCKED DB)", () => {
     expect(await db.evidence.count()).toBe(0);
   });
 
-  it("analyze requires evidence and fails cleanly when AI is unavailable", async () => {
+  it("analyzes without files and fails cleanly when AI is unavailable", async () => {
     const cookie = await cookieFor(USER_A);
     const id = await createCase(cookie);
 
-    // No evidence → 400
+    // Files are OPTIONAL: analysis runs from the story alone, but with AI
+    // disabled (no AI_API_KEY in test env) it must honestly return 503 —
+    // never fabricate findings.
     const empty = await analyze(
       jsonRequest(`/api/investigations/${id}/analyze`, {}, cookie),
       { params: Promise.resolve({ id }) },
     );
-    expect(empty.status).toBe(400);
-    expect((await empty.json()).error.code).toBe("NO_EVIDENCE");
+    expect(empty.status).toBe(503);
+    expect((await empty.json()).error.code).toBe("AI_UNAVAILABLE");
+    expect(await db.finding.count()).toBe(0); // nothing fabricated with no files
 
-    // With evidence but AI disabled (no AI_API_KEY in test env) → 503, no fabricated findings
+    // With evidence but AI disabled → 503, no fabricated findings
     const file = new File(["saw a man in black at 14:02"], "witness.txt", { type: "text/plain" });
     const form = new FormData();
     form.append("file", file);

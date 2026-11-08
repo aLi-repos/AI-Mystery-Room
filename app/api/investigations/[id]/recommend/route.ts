@@ -21,11 +21,14 @@ export async function POST(
     const db = getPrisma();
     const investigation = await db.investigation.findFirst({
       where: { id, userId: user.id },
-      select: { caseDescription: true },
+      select: { caseDescription: true, categories: true },
     });
     if (!investigation) return apiError(404, "NOT_FOUND", "Investigation not found");
 
-    const result = await recommendEvidence(investigation.caseDescription);
+    const result = await recommendEvidence(
+      investigation.caseDescription,
+      investigation.categories,
+    );
     if (!result) {
       return apiError(
         503,

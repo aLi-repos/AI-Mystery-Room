@@ -71,6 +71,8 @@ enum EvaluatedBy {
 }
 
 /// Evidence categories selectable per investigation (AI investigation mode).
+/// Includes the Step-B focus categories; `fingerprint`/`dna` are stored but
+/// never extracted (no capability in this deployment).
 enum EvidenceCategory {
   video
   image
@@ -78,6 +80,13 @@ enum EvidenceCategory {
   text
   audio
   other
+  cctv
+  photograph
+  fingerprint
+  dna
+  phone_records
+  location
+  documents
 }
 
 /// `unprocessed` = stored but NOT analysed (format unsupported) — surfaced
@@ -89,6 +98,8 @@ enum EvidenceStatus {
 }
 
 /// Kinds of AI findings; every finding references supporting evidence ids.
+/// `simulated_evidence` = AI-generated material, labelled as such in the UI
+/// (never presented as genuine evidence).
 enum FindingKind {
   fact
   observation
@@ -97,6 +108,10 @@ enum FindingKind {
   timeline
   missing_evidence
   link
+  suspect
+  lead
+  simulated_evidence
+  alternative
 }
 
 // ---------------------------------------------------------------------------

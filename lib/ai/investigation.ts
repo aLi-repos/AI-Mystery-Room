@@ -32,7 +32,11 @@ export type AnalysisFinding = {
     | "inconsistency"
     | "timeline"
     | "missing_evidence"
-    | "link";
+    | "link"
+    | "suspect"
+    | "lead"
+    | "simulated_evidence"
+    | "alternative";
   statement: string;
   timeLabel: string | null;
   evidenceRefs: string[];
@@ -132,6 +136,8 @@ function groundingRules(): string {
     "4. Separate OBSERVED FACTS from HYPOTHESES: use kind=fact/observation for what evidence shows, kind=hypothesis for inference (label uncertainty in the statement).",
     "5. Use kind=inconsistency for contradictions between evidence items, kind=timeline for ordered events (fill timeLabel when evidence supports a time), kind=missing_evidence for gaps, kind=link for related evidence.",
     "6. Express uncertainty honestly (confidence=medium/low) when evidence is ambiguous or incomplete. Never fabricate to fill gaps — use missing_evidence instead.",
+    "7. EVIDENCE PROVENANCE (critical): findings grounded in UPLOADED files are USER-PROVIDED evidence; findings derived only from your reading of the case story are AI-DEVELOPED. Anything you generate yourself (a witness statement, CCTV scenario, audio transcript, fingerprint/DNA result) MUST be kind=simulated_evidence and its statement MUST begin with \"SIMULATED — \" so it is never mistaken for real evidence. Never claim CCTV frames, fingerprints, DNA or forensic results were extracted from a file unless that file is marked as analysed contents.",
+    "8. Use kind=suspect for persons of interest (profile: role, opportunity, motive, suspicious behaviour, evidence refs), kind=lead for actionable investigative leads, and kind=alternative for alternative explanations of the main conclusion.",
   ].join("\n");
 }
 
@@ -143,6 +149,10 @@ const FINDING_KINDS = [
   "timeline",
   "missing_evidence",
   "link",
+  "suspect",
+  "lead",
+  "simulated_evidence",
+  "alternative",
 ];
 
 const analysisSchema = {
@@ -181,12 +191,17 @@ export async function analyzeCase(args: {
   caseDescription: string;
   evidence: EvidenceInput[];
   requirements?: string[];
+  categories?: string[];
 }): Promise<AnalysisResult | null> {
-  const { caseDescription, evidence, requirements } = args;
+  const { caseDescription, evidence, requirements, categories } = args;
   const prompt = [
-    "You are a forensic investigation assistant. Analyse the case below like an investigator: first understand the story and identify the persons, events, locations and clues it describes.",
+    "You are a forensic investigator. Understand the case story below, identify the persons, events, locations and clues it describes, then DEVELOP THE INVESTIGATION: leads, suspects, contradictions, timeline, connections, missing information and alternative explanations.",
     "",
     `CASE DESCRIPTION:\n${caseDescription}`,
+    "",
+    categories?.length
+      ? `SELECTED EVIDENCE CATEGORIES (focus of this investigation):\n${categories.map((c) => `- ${c}`).join("\n")}`
+      : "",
     "",
     evidenceManifest(evidence),
     textEvidenceBlocks(evidence),
@@ -197,7 +212,7 @@ export async function analyzeCase(args: {
     "",
     groundingRules(),
     "",
-    "Return JSON matching the schema: summary (2-4 sentences); findings (the identified persons, events, locations and clues, plus observations, inconsistencies, links, timeline entries and hypotheses); missingEvidence (evidence that should be collected next — for each item state the evidence type, e.g. CCTV footage, audio recording, photograph, PDF/text document, and why it is relevant to this case).",
+    "Return JSON matching the schema: summary (2-4 sentences); findings covering: verified observations from the story/uploaded files, SIMULATED evidence descriptions where none exists (labelled, never as genuine), suspect profiles, suspicious behaviour, contradictions, timeline entries, evidence connections, actionable leads, alternative explanations, and unverified hypotheses; missingEvidence (evidence that should be collected next — state the evidence type and why it is relevant to this case).",
   ]
     .filter(Boolean)
     .join("\n");
@@ -305,15 +320,18 @@ export async function generateReport(args: {
 }): Promise<string | null> {
   const { caseDescription, evidence, findingsDigest, missingEvidence, qaHistory } = args;
   const prompt = [
-    "You are a forensic investigation assistant. Write a professional investigation report in Markdown with these sections:",
-    "# Investigation Report",
+    "You are a forensic investigator writing the FINAL VERDICT report. Write in Markdown with exactly these sections:",
+    "# Investigation Report — Final Verdict",
     "## 1. Case Summary",
-    "## 2. Evidence Examined (list each file with its EV ref and whether it was analysed)",
-    "## 3. Key Findings (each with [EVn] citations)",
-    "## 4. Timeline (only if evidence supports it; otherwise state that a timeline cannot be established)",
-    "## 5. Inconsistencies and Contradictions",
-    "## 6. Missing Evidence and Recommended Next Steps",
-    "## 7. Uncertainties and Limitations",
+    "## 2. Evidence Examined (each file with its EV ref, and whether it was actually analysed; separate user-uploaded files from AI-generated SIMULATED material)",
+    "## 3. Timeline Reconstruction (only if supported; otherwise state it cannot be established)",
+    "## 4. Suspect Analysis (persons of interest: role, opportunity, motive, suspicious behaviour, supporting evidence IDs)",
+    "## 5. Mistakes and Contradictions Discovered",
+    "## 6. Evidence Supporting Each Conclusion (every conclusion cites its [EVn] IDs or the case-description source)",
+    "## 7. Alternative Explanations",
+    "## 8. Most Likely Explanation",
+    "## 9. Final Verdict and Confidence Level (verdict must cite the evidence IDs it rests on; state confidence honestly — never claim certainty the evidence cannot support)",
+    "## 10. Remaining Uncertainties",
     "",
     `CASE DESCRIPTION:\n${caseDescription}`,
     "",
@@ -333,7 +351,7 @@ export async function generateReport(args: {
     "",
     groundingRules(),
     "",
-    "Cite [EVn] refs for every evidence-grounded claim. State plainly when something was not analysed or cannot be concluded.",
+    "Cite [EVn] refs for every evidence-grounded claim. Mark AI-generated material as SIMULATED and keep it separate from real evidence. State plainly when something was not analysed or cannot be concluded; the verdict must explain its reasoning and name the evidence IDs behind it.",
   ]
     .filter(Boolean)
     .join("\n");
@@ -380,12 +398,17 @@ export type RecommendationResult = {
  */
 export async function recommendEvidence(
   caseDescription: string,
+  categories: string[] = [],
 ): Promise<RecommendationResult | null> {
   const prompt = [
     "You are a forensic investigator analysing a case story BEFORE any evidence has been collected.",
     `CASE STORY:\n${caseDescription}`,
     "",
-    "Identify the persons, events, locations and clues the story describes, then recommend the evidence that should be collected to investigate the case. Cover the supported types where relevant: CCTV/video footage, audio recordings, photographs/images, PDF/text documents and other supporting files.",
+    categories.length
+      ? `SELECTED EVIDENCE CATEGORIES (focus of this investigation):\n${categories.map((c) => `- ${c}`).join("\n")}`
+      : "",
+    "",
+    "Identify the persons, events, locations and clues the story describes, then recommend the evidence that should be collected to investigate the case. Cover the supported types where relevant: CCTV/video footage, audio recordings, photographs/images, fingerprints, DNA/forensic samples, phone/call records, location/movement records, PDF/text documents and other supporting files.",
     "For each recommendation give the evidence type and a short reason explaining why it is relevant to THIS case.",
     "Never state that evidence exists or was analysed — only recommend what should be collected. If the story is too vague, say what detail is missing.",
     "Return JSON: {summary: string (2-3 sentences on what the story describes), recommendations: [{type: string, reason: string}]}.",
