@@ -64,7 +64,8 @@ async function callGemini(
     const base =
       process.env.AI_BASE_URL || "https://generativelanguage.googleapis.com/v1beta";
     const model = process.env.AI_MODEL || "gemini-3.6-flash";
-    const res = await fetch(`${base}/models/${model}:generateContent?key=${key}`, {
+    const url = `${base}/models/${model}:generateContent?key=${key}`;
+    const init: RequestInit = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -77,7 +78,14 @@ async function callGemini(
         // Grounded, conservative behaviour.
         safetySettings: [],
       }),
-    });
+    };
+    let res = await fetch(url, init);
+    if (!res.ok) {
+      // One retry after a short pause — absorbs transient rate limits (429)
+      // and provider blips without ever fabricating a result.
+      await new Promise((r) => setTimeout(r, 2000));
+      res = await fetch(url, init);
+    }
     if (!res.ok) return null;
     const data = await res.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -335,17 +343,21 @@ export async function generateReport(args: {
   const key = geminiAvailable();
   if (!key) return null;
   try {
-    const res = await fetch(
-      `${base}/models/${process.env.AI_MODEL || "gemini-3.6-flash"}:generateContent?key=${key}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [textPart(prompt)] }],
-          generationConfig: { maxOutputTokens: 4096 },
-        }),
-      },
-    );
+    const url = `${base}/models/${process.env.AI_MODEL || "gemini-3.6-flash"}:generateContent?key=${key}`;
+    const init: RequestInit = {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [textPart(prompt)] }],
+        generationConfig: { maxOutputTokens: 4096 },
+      }),
+    };
+    let res = await fetch(url, init);
+    if (!res.ok) {
+      // One retry — same transient-limit absorption as callGemini.
+      await new Promise((r) => setTimeout(r, 2000));
+      res = await fetch(url, init);
+    }
     if (!res.ok) return null;
     const data = await res.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
